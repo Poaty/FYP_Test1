@@ -1,0 +1,73 @@
+# --- Secrets (NEVER commit these) ---
+.env
+.env.local
+.env.*.local
+application-local.properties
+application-local.yml
+application-secret.properties
+*.pem
+*.key
+
+# Defensive: anything that looks like it holds credentials
+*password*
+*secret*
+*credential*
+*credentials*
+*.secret
+api-keys.*
+
+# --- Gradle ---
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# --- Maven (in case we ever switch) ---
+target/
+
+# --- IntelliJ ---
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+# --- VS Code ---
+.vscode/
+
+# --- Java ---
+*.class
+*.jar
+*.war
+*.nar
+*.ear
+hs_err_pid*
+replay_pid*
+
+# Re-include the Gradle wrapper jar (must be tracked so others can build)
+!gradle/wrapper/gradle-wrapper.jar
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Logs / temp ---
+*.log
+logs/
+tmp/
+
+# --- Office backup files ---
+~$*.docx
+~$*.xlsx
+
+# --- Local dev scratch ---
+scratch/
+notes.local.md
+
+# --- Claude session files (keep memory, ignore session artefacts) ---
+.claude/projects/*/sessions/
+.claude/settings.local.json

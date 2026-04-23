@@ -1,0 +1,17 @@
+# ============================================================
+# LOCAL SECRETS TEMPLATE
+# ============================================================
+# 1. Copy this file to:  application-local.properties
+# 2. Fill in the real values below.
+# 3. The filename `application-local.properties` is gitignored,
+#    so it never gets pushed to GitHub.
+# 4. To activate this profile when running the app, add the
+#    VM option:  -Dspring.profiles.active=local
+#    (or in IntelliJ: Run -> Edit Configurations -> Active profiles = local)
+# ============================================================
+
+# --- Supabase DB ---
+spring.datasource.password=PASTE_NEW_SUPABASE_PASSWORD_HERE
+
+# --- OMDb API ---
+omdb.api.key=dc2eaf84
