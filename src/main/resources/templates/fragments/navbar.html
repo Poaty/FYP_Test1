@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<body>
+
+<!-- Shared navbar fragment. Every page includes this via:
+       <nav th:replace="~{fragments/navbar :: navbar}"></nav>
+-->
+<nav th:fragment="navbar" class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container">
+        <a class="navbar-brand fw-bold" th:href="@{/}">Movie Community</a>
+        <div class="d-flex align-items-center gap-2">
+
+            <!-- Authenticated -->
+            <span sec:authorize="isAuthenticated()" class="text-white-50 me-2">
+                Signed in as <span class="text-white" sec:authentication="name">username</span>
+            </span>
+            <form sec:authorize="isAuthenticated()" th:action="@{/logout}" method="post" class="m-0">
+                <button class="btn btn-outline-light btn-sm" type="submit">Log out</button>
+            </form>
+
+            <!-- Anonymous -->
+            <a sec:authorize="!isAuthenticated()" th:href="@{/login}"
+               class="btn btn-outline-light btn-sm">Log in</a>
+            <a sec:authorize="!isAuthenticated()" th:href="@{/signup}"
+               class="btn btn-light btn-sm">Sign up</a>
+        </div>
+    </div>
+</nav>
+
+</body>
+</html>
