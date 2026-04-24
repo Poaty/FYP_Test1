@@ -2,11 +2,54 @@
 
 Running log for the FYP dissertation. Every bullet here is a thing worth writing about in the report. When drafting the final doc, open this file and lift bullets into prose.
 
+## Marking weightings (from the grid PDF)
+
+- **Report Chapters — coverage and coherence: 50%**
+- **Subject Matter and Project Achievement: 40%** (type of work, project size, achievement, initiative, demo)
+- **Structure / Clarity / Presentation: 10%** (lucidity, analytical depth, English, references)
+
+**Two recurring high-grade criteria in the grid** — keep these in mind while writing:
+1. **Analytical, not descriptive.** "Reasoned argument" = 2.1; "critical skills applied in depth" = 1st; "purely descriptive" = 3rd.
+2. **Quantitative evaluation.** Explicitly asked for at Ch5 and under Project Size. "No quantitative or measurable evidence" = Fail.
+
+**Target word counts** (NTU Level 6 CS FYP, verify with supervisor):
+- Total main body ≈ 12,000–15,000 words (≈50–60 pages).
+- Chapter 2 and Chapter 4 are the biggest chapters; Chapter 5 is smaller but carries big marks.
+
+
 **How to use:**
 - Claude updates this after each meaningful decision or piece of work
 - Bullets are grouped by report chapter so you can write chapters in order
 - `Citation:` tags mark where a Harvard reference needs to slot in
 - `Evidence:` tags mark where a screenshot, code listing, or log should be pasted
+
+---
+
+## PPD commitments — revised scope (agreed 2026-04-23)
+
+**Building in the MVP:**
+- Account creation (signup / login) — done
+- Movie posting
+- Commenting on posts
+- For You algorithm with 1:4 diversity ratio (core thesis feature)
+- Watch parties / events — reframed as scheduled movie events with RSVP + comment thread (no real-time streaming or chat)
+- Admin moderation — simple `is_admin` flag + delete-post/comment/event endpoints
+- Privacy page, TOS / guidelines page, survey consent page (static content, hits transparency + DPA + consent LSEPIs)
+- User testing via Google Form (5–8 participants, anonymised)
+
+**Intentional cuts (defended in Chapter 6 as design choices, not failures):**
+- **Reactions / like button.** Visible popularity metrics are precisely the mechanism that drives the algorithmic conformity effect the thesis argues against (`Citation: Cheung & Thadani 2012`). Leaving them out is a design choice, not a shortfall.
+- **Visible upvotes and numeric rating scores.** Same argument. Users never see a numeric popularity indicator they could conform to. The only engagement cue we expose is a comment count — and crucially, a *comment* is qualitative engagement (someone wrote a reply), not a reducible numeric judgement ("3 likes"). Thesis-safe: comment counts indicate "this sparked discussion," not "this is the approved opinion."
+
+**Honest cuts (acknowledged in Chapter 6 as Future Work with timeline reasoning):**
+- Real-time chatrooms (≤4 users) — would require WebSocket infrastructure, room management, reconnection handling; ~2–3 days of work on its own. Out of scope for the 14-day compressed timeline.
+- Slur / bad-word filter — needs a wordlist + false-positive handling + test coverage. Roughly 1–2 days. Future work.
+- Separate report / flag system — admin moderation above covers the same LSEPI commitment.
+- In-app feedback survey (20-min unlock) — Google Form collects the same data with negligible functional loss.
+
+**PPD-explicit out-of-scope (left out as originally planned):**
+- Mobile client
+- AI in the For You page
 
 ---
 
@@ -85,6 +128,32 @@ Rationale: standard Spring layered structure. Keeps concerns separated without b
 - **Environment variables for all secrets.** DB password and OMDb API key read via `${SUPABASE_DB_PASSWORD}` and `${OMDB_API_KEY}` in `application.properties`. Nothing sensitive is committed to git.
 - **`.gitignore` defensively blocks `*password*`, `*secret*`, `*.env`, `application-local.properties`.** Belt-and-braces against accidental commits.
 
+### Comment system
+
+- **Flat conversations, not threaded.** Comments attach to a Post, never to another Comment. Threading encourages pile-ons and reaction economies; flat discussion forces everyone to respond to the original post itself — more thesis-aligned with "honest emotional reaction over social performance."
+- **Unidirectional relationship.** `Post` doesn't hold a `List<Comment>`. Comments are only loaded when the user visits a post's detail page, not on feed queries — keeps feed rendering O(1) per post regardless of how many comments exist.
+- **Oldest-first ordering.** Matches natural reading order (blog-style, not Reddit-style). Replies land at the bottom where people are scrolling to.
+- **No comment count on feed cards** — deliberate. Showing counts cheaply would need a `GROUP BY` per feed render; left out for MVP. Defensible as "N+1 avoidance via opt-in data loading." Easy Future Work item.
+- **Error re-render preserves drafts.** If a comment fails validation, the page re-renders with the user's typed text intact. Uses the standard Spring MVC `BindingResult` pattern. Important for the UX argument — a platform asking for "honest emotional reactions" can't dump someone's 300-word typed-from-the-heart comment because it was over the character limit.
+- **URL anchor after submit** — redirects to `/posts/{id}#comments` so scroll lands on the new comment, not the top of the page.
+
+### Lazy loading discipline (important Chapter 4 material)
+
+- **We have `spring.jpa.open-in-view=false`.** Default Spring Boot leaves this on, which keeps the Hibernate session open until after view rendering — convenient, but it means Thymeleaf can silently trigger extra DB queries mid-render. Turning it off is the recommended practice but forces every code path to declare what it needs up front.
+- **The lesson (paid for in a real bug).** The first `/posts/{id}` implementation used `postRepository.findById(id)`, which returns lazy proxies for `user` and `movie`. Thymeleaf then tried `post.movie.title`, Hibernate tried to lazy-load, the session was already closed — `org.attoparser.ParseException`, white-label error page.
+- **Fix: explicit JOIN FETCH queries per view.** Added `PostRepository.findByIdWithAuthor(id)` with `JOIN FETCH p.user JOIN FETCH p.movie`. Did the same for `CommentRepository.findByPostOrderByCreatedAtAsc` so the comments list can render author usernames without lazy-loading.
+- **Why this is the right trade.** Open-in-view hides the problem; disabling it makes the cost visible. With `findById` you get one query + N surprise queries during rendering. With `JOIN FETCH` you get one query total, declared where the data is fetched. Louder when wrong, cheaper when right.
+- **Pattern name for Chapter 4:** *"Fail fast on unintended lazy loads."* Contrasts nicely against the Spring Boot default convenience behaviour.
+- `Evidence: commit where findByIdWithAuthor was added (post-comments fix).`
+
+### Post creation flow
+
+- **Two-page flow, not one-page AJAX.** `/posts/new` → search + results, then `/posts/new/write?imdbId=...` → compose. Server-side only; no JS build pipeline. Survives page refresh (good UX) and cheaper to build than a single-page form.
+- **`getReferenceById` for the author FK.** When saving a post we need the user's id for the foreign key but not the full entity. `userRepository.getReferenceById(me.getId())` returns a Hibernate proxy with just the id, skipping a `SELECT users WHERE id = ?`. One less DB round-trip per post. Small win, but illustrative of the "make the common path cheap" principle.
+- **Validation errors re-render the write page** with the user's text intact and inline error messages next to fields. Uses Spring's `BindingResult` pattern. No lost drafts.
+- **Thesis-aligned UX copy.** The textarea placeholder is "No likes, no scores, no five-star rating. Just what actually stuck with you." The UI copy *is* a design argument against visible popularity metrics; flag this in Chapter 3 when discussing design choices.
+- **Feed shows posts newest-first using `findRecentWithAuthors`** (JOIN FETCH — no N+1 queries). Content respects whitespace (`white-space: pre-wrap`) so line breaks in reviews survive.
+
 ### OMDb integration
 
 - **Layered design.** `OmdbClient` is a thin HTTP wrapper (knows nothing about our domain). `MovieService` sits above it and handles caching via `MovieRepository`. Controllers talk to `MovieService`, not `OmdbClient`. Keeps each layer single-purpose.
@@ -100,20 +169,108 @@ Rationale: standard Spring layered structure. Keeps concerns separated without b
 - **Year parsing quirk.** OMDb sends TV-series years as `"2014–"` or `"2014–2017"`. `MovieService.parseYear` strips non-digits and takes the first 4 chars. Flagged as a known limitation — tweak if we need series support.
 - `Evidence: OmdbClient.java, MovieService.java, OmdbMovie.java.`
 
-### For You algorithm
+### For You algorithm (thesis centrepiece)
 
-- TODO — core feature. Design the 1:4 diversity logic, justify the choice of "unconventional" signal, discuss tuning.
+**The problem being solved.** Mainstream recommender systems (Letterboxd's popular page, IMDb's most-rated, social-media For You pages) rank content by engagement metrics, surfacing what already has eyes on it. This reinforces the echo-chamber effect documented in Lee, Park & Han (2008) — users see consensus, internalise consensus, produce consensus.
+
+**The design goal.** Per the PPD: every 5 feed slots, 1 should come from the "long tail" — low-engagement posts a popularity-only feed would bury. This is the 1:4 diversity ratio.
+
+**The scoring formula** (lives in `ForYouService.score(...)`):
+```
+score = commentCount × w_comment
+      + otherPostsOnSameMovie × w_movie
+      − daysOld × w_age_penalty
+```
+With default weights `{comment: 3.0, movie: 1.0, age_penalty: 0.2}`. All three live in `application.properties` — tunable without recompiling. **Future work:** learn these weights from actual engagement (gradient descent on click-through rate, say).
+
+**How popular and unconventional buckets are picked:**
+1. Pool = most recent N posts (default 100)
+2. Rank by score DESC
+3. Popular = top (N - N/(ratio+1)) slots
+4. Unconventional = bottom-scoring posts NOT already in Popular (deduplicated)
+5. Interleave: positions 4, 9, 14, 19 (1-indexed: every 5th) = unconventional; rest = popular
+
+**Defensibility choices:**
+- **"Least popular" as the unconventional signal.** Simplest honest signal available without sentiment analysis. Alternatives considered and rejected for MVP: "posts about less-discussed movies" (covered indirectly via the movie-popularity term), "posts by newer users" (overlaps with low comment counts). `Citation: Cheung & Thadani 2012` — eWOM effect implies low-visibility posts are disproportionately *silenced*, so surfacing them is the corrective move.
+- **Linear weighted sum, not multiplicative.** Easier to explain in the report, easier to tune by hand, no surprising interactions. Trade-off acknowledged: multiplicative would be more expressive. Fine for MVP.
+- **Transparent labels on the feed, but honest ones.** Cards show either `popular`, `quiet pick`, or nothing. Unlike mainstream platforms which hide their weighting, we tell the user what the algorithm is doing. Critically, **labels are decoupled from slot placement** — a post doesn't get the `popular` badge just because the algorithm ranked it high; it has to actually have engagement. Threshold: comment count ≥ 20% of the peak comment count on any post in the last 7 days (configurable). Stops the feed from lying ("popular" with 0 comments makes no sense). `quiet pick` is only applied when the algorithm deliberately surfaced a low-engagement post via the diversity slot. Everything else gets no badge. Worth 1–2 paragraphs in Chapter 3.
+- **Naming: "quiet pick", not "long tail".** "Long tail" is statistics jargon (the low-frequency portion of a power-law distribution); unfamiliar users find it opaque. "Quiet pick" is plain English and carries the same meaning: an underheard voice the algorithm has foregrounded.
+- **Tunable via config, not hardcoded.** Weights and ratio in `application.properties`, not constants. Shows engineering discipline to the grader.
+- **Comment counts shown, upvote counts not.** Feed cards show "N comments" because a comment count represents *qualitative depth of discussion* — someone took time to write a reply. This is fundamentally different from a like count, which is a one-click numeric judgement that invites conformity (Cheung & Thadani 2012). Comment counts give users a discussion-density cue without supplying a popularity-metric to conform to.
+
+**Quantitative evaluation hooks** (for Chapter 5):
+- Same pool of posts, run through both algorithms. Compare:
+  - Shannon entropy over movie genres in the top-20
+  - Count of distinct authors in the top-20
+  - Percentage of posts drawn from below-median comment count
+- Expect our feed to score measurably higher on all three. Report as a table.
+
+### Demo data seeding
+
+- `DemoDataSeeder` (a `CommandLineRunner` bean) populates the DB in two phases. Phase 1 (checked against `users.alice`): 5 users, 10 movies, 16 posts, 20 comments. Phase 2 (checked against the Matrix movie being cached): +5 movies, +15 posts, +30 comments concentrated on a handful of posts to lift the peak comment count into double digits.
+- **Two phases rather than one** so re-running the app picks up incremental seed content without needing to wipe tables. Each phase has an independent idempotency check.
+- **Why seed at all:** the For You algorithm is invisible without real signal variance. You can't demonstrate "we surface quieter posts" on a DB with 3 posts. User-testing participants on Day 7 need content to react to.
+- **Why two phases with engagement skew:** phase 1 alone produced a peak of 4 comments, making the "popular" threshold (20% of peak) round to 1 — degenerate. Phase 2 pushes peak to ~10, threshold to ~2, which is where the label logic starts being meaningful. Concrete example worth writing up.
+- **Genre variety** — phase 2 adds horror (Shining), thriller (Se7en), Korean drama (Parasite), cult comedy (Groundhog Day), and iconic sci-fi (Matrix) so the Shannon-entropy metric has real variance to measure in Chapter 5.
+- **All seeded passwords = `demo1234`.** Fine for development, flagged for hardening in Chapter 6 future work.
+- Evidence: `DemoDataSeeder.java` is a clean single-file read for the Appendix D code listing.
+
+### Pagination
+
+- `/feed` uses Spring Data's `Page<Post>` with a page size of 20. URL param `?page=N` (0-indexed). Template shows "Page X / Y" with prev/next buttons.
+- Custom `@Query` with explicit `countQuery` — Hibernate can't auto-generate a count query from a `JOIN FETCH`, so we supply one.
+
+### For You is single-page on purpose (Chapter 3 material)
+
+**Decision:** `/for-you` is a fixed 20-item feed. No pagination. Definitely no infinite scroll.
+
+**Rationale:** the PPD cites Madhav, Sherchand & Sherchan (2017) on the association between extended daily screen time and depression, and explicitly names "endless scrolling mechanisms that hook their brain" as a problem the project sets out to resist. Infinite scroll on For You would be exactly the pattern the thesis argues against. Mainstream platform For You pages (TikTok, Instagram, Twitter) are infinite for a reason — engagement capture — and that reason is the thing we're pushing back on.
+
+**Alternatives considered:**
+- Infinite scroll: rejected (thesis violation).
+- Paginated For You (multiple pages of 20 each): possible, but each page re-runs the diversity algorithm on an expanding "exclude" set, which bloats the DB calls and makes the "highlights reel" framing weaker.
+- Hard-capped pagination (max 3 pages, say): tenable compromise. Not pursued for MVP; flagged as a design-space alternative worth mentioning.
+
+**End-of-feed checkout** — a stronger UX than "silent end." After the 20 picks the user is presented with two deliberate choices:
+
+- **Take a break** (primary button) — logs them out. The MOST thesis-aligned action on a platform built to resist compulsive engagement is to actually *leave* when you're done.
+- **Keep reading →** (secondary button) — takes them to the paginated chronological feed. Allowed, but framed as the conscious choice rather than the default.
+
+Surrounding both buttons: a "notice whether you're doing it because you want to, or because scrolling feels automatic" prompt. Reflection-first copy, not command-and-control copy.
+
+**Pattern name worth coining in the report:** "end-of-feed checkout." It is a deliberate *friction interstitial* — the opposite of the engagement-maximising designs documented across mainstream social platforms. Most platforms invest heavily in *removing* end-of-feed moments (infinite scroll, autoplay, pull-to-refresh). We invest in *creating* them. Worth citing this in Chapter 3 alongside Madhav et al. (2017) and in Chapter 6 as a concrete example of the project's professional/ethical stance (acting in the user's best interests per BCS Code of Conduct, rather than only in the platform's engagement interests).
+
+**Worth a paragraph in Chapter 3:** this is a design choice that looks like a missing feature (no pagination) but is actually the opposite — a deliberate constraint driven by the thesis. Anti-feature. Same vein as "no reactions, no like counts." Good narrative for the viva.
 
 ## Chapter 5 — Results / Discussion
 
-- User testing target: 5–8 participants via Google Form (downscoped from the PPD's 10 due to the compressed timeline — justify honestly in the report).
-- Metrics to capture in the survey:
-  - Overall satisfaction (1–5)
-  - "The feed showed me movie opinions I wouldn't have found on Letterboxd/IMDb" (agree/disagree)
-  - "I felt comfortable sharing my honest opinion" (agree/disagree)
-  - Free-text: what was confusing / what did you like
-- Aiming for ≥75% satisfaction per PPD.
-- TODO — add data and screenshots post-testing.
+**Important: the marking grid rewards quantitative evaluation explicitly.** 1st/2.1 criteria call for "numerical performance data, statistical comparisons, measurable system metrics". Purely qualitative evaluation caps at low 2.2. So Chapter 5 needs numbers, not just survey quotes.
+
+### Quantitative measurements to bake in (plan these into build)
+
+**Feed-diversity metrics** — run offline on a seeded DB, compare "popular-only feed" vs "our 1:4 diverse feed":
+- **Shannon entropy over genres** across the top-20 feed. Higher = more diverse. Expect our feed to score substantially higher.
+- **Unique-author ratio** — fraction of distinct users in top-20. Popularity bias clusters around power-users; diversity should broaden this.
+- **Long-tail coverage** — % of feed items drawn from below-median-engagement posts. Popular-only ≈ 0%, ours ≈ 20% by design.
+- Report as a table: metric / popular-only feed / our feed / delta.
+
+**Performance metrics** — cheap to capture with Spring Boot logging:
+- Feed page load time (with cache warm / cold)
+- OMDb cache hit rate over a session
+- DB queries per feed render (we already dodge N+1 via JOIN FETCH — we can show the measurable benefit)
+
+**User testing (A/B design)** — each participant sees both feeds, side by side or in sequence:
+- Likert 1–5 for each feed on: "this felt authentic", "I saw opinions I wouldn't find on Letterboxd", "I'd want to comment on these"
+- Forced choice: which would you rather use daily?
+- Report means, std devs, and if n≥5 a paired comparison (e.g. Wilcoxon signed-rank — small-n appropriate).
+
+### Survey design (Google Form)
+
+- 5–8 participants (downscoped from PPD's 10 — justify honestly: 14-day timeline, quality over quantity).
+- Participants must be 18+; consent page first; right to withdraw; data anonymised.
+- Aim for ≥75% per PPD.
+- Capture free-text reactions to each feed — pull quotes for the discussion section.
+- TODO — design the Google Form when we get to Day 7.
 
 ## Chapter 6 — Conclusions / Future Work
 

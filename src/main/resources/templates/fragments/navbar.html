@@ -12,8 +12,14 @@
         <div class="d-flex align-items-center gap-2">
 
             <!-- Authenticated -->
-            <span sec:authorize="isAuthenticated()" class="text-white-50 me-2">
-                Signed in as <span class="text-white" sec:authentication="name">username</span>
+            <a sec:authorize="isAuthenticated()" th:href="@{/feed}"
+               class="btn btn-outline-light btn-sm">Feed</a>
+            <a sec:authorize="isAuthenticated()" th:href="@{/for-you}"
+               class="btn btn-outline-light btn-sm">For You</a>
+            <a sec:authorize="isAuthenticated()" th:href="@{/posts/new}"
+               class="btn btn-primary btn-sm">+ New post</a>
+            <span sec:authorize="isAuthenticated()" class="text-white-50 mx-2">
+                <span class="text-white" sec:authentication="name">username</span>
             </span>
             <form sec:authorize="isAuthenticated()" th:action="@{/logout}" method="post" class="m-0">
                 <button class="btn btn-outline-light btn-sm" type="submit">Log out</button>
