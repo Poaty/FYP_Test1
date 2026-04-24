@@ -207,18 +207,41 @@ With default weights `{comment: 3.0, movie: 1.0, age_penalty: 0.2}`. All three l
 
 ### Demo data seeding
 
-- `DemoDataSeeder` (a `CommandLineRunner` bean) populates the DB in two phases. Phase 1 (checked against `users.alice`): 5 users, 10 movies, 16 posts, 20 comments. Phase 2 (checked against the Matrix movie being cached): +5 movies, +15 posts, +30 comments concentrated on a handful of posts to lift the peak comment count into double digits.
-- **Two phases rather than one** so re-running the app picks up incremental seed content without needing to wipe tables. Each phase has an independent idempotency check.
-- **Why seed at all:** the For You algorithm is invisible without real signal variance. You can't demonstrate "we surface quieter posts" on a DB with 3 posts. User-testing participants on Day 7 need content to react to.
-- **Why two phases with engagement skew:** phase 1 alone produced a peak of 4 comments, making the "popular" threshold (20% of peak) round to 1 — degenerate. Phase 2 pushes peak to ~10, threshold to ~2, which is where the label logic starts being meaningful. Concrete example worth writing up.
-- **Genre variety** — phase 2 adds horror (Shining), thriller (Se7en), Korean drama (Parasite), cult comedy (Groundhog Day), and iconic sci-fi (Matrix) so the Shannon-entropy metric has real variance to measure in Chapter 5.
-- **All seeded passwords = `demo1234`.** Fine for development, flagged for hardening in Chapter 6 future work.
-- Evidence: `DemoDataSeeder.java` is a clean single-file read for the Appendix D code listing.
+Realistic seed data lives across three files:
+
+1. **`DemoDataSeeder.java`** (Java, runs on app startup). Two idempotent phases.
+   - Phase 1 (checked against `users.alice`): 5 users, 10 movies, 16 posts, 20 comments.
+   - Phase 2 (checked against the Matrix movie being cached): +5 movies, +15 posts, +30 comments concentrated on a handful of posts to lift peak engagement into double digits.
+2. **`extra_seed_data.sql`** (pasted into Supabase SQL Editor): +50 posts, +100 comments, all from the original 5 seeded users. Engagement distribution designed on purpose:
+   - 8 hot posts with 6 comments each
+   - 8 medium with 3 each
+   - 14 light with 2 each
+   - 20 quiet posts with zero — explicit long-tail fodder for the For You algorithm
+3. **`extra_users_data.sql`**: +30 users, +20 posts from them, +30 comments from them across existing hot threads. Fixes the "5 people in a Discord server" feel that the earlier seed had. All 30 new users inherit alice's BCrypt hash via `INSERT ... SELECT`, so they share password `demo1234` without any hardcoded hash literal.
+
+**Total seeded corpus:** ~35 users, ~101 posts, ~180 comments. Peak comment count ~8. Popular threshold (20% of peak) lands at 2 — a meaningful cut-off rather than the degenerate "anything with a single comment" we started with.
+
+**Design choices worth writing up:**
+- **Two SQL files rather than one big seeder.** The Java seeder runs automatically; the two `.sql` files are opt-in so the user can add volume without waiting for another app restart cycle. Each SQL file is self-contained, idempotent, and atomic (wrapped in `DO $$ ... $$` blocks — if anything fails mid-way, nothing is written).
+- **Idempotency checks per file** — not per table. Each SQL file looks for a canary row (specific post content for `extra_seed_data`, specific username for `extra_users_data`) and bails out if present. Re-running is safe.
+- **Atomic all-or-nothing.** Postgres `DO` blocks implicitly transaction-wrap the whole body. A failure in comment 90 of 100 rolls back the whole seed, not a partial state. Important for a demo dataset — you either have it fully or not at all.
+- **Genre variety** — combined corpus covers drama, sci-fi, horror, thriller, Korean drama, animation, comedy, fantasy, war, crime. Shannon-entropy metric in Chapter 5 will have real variance to measure across ~15 genres.
+- **Realistic engagement skew** — a few hot posts, many quiet ones. Matches natural distribution on real platforms, which is what the For You algorithm was designed to correct against.
+- **All seeded passwords = `demo1234`.** Fine for dev; flagged for Chapter 6 future work.
+- **Evidence:** `DemoDataSeeder.java`, `extra_seed_data.sql`, `extra_users_data.sql` — all three belong in the appendix code listing. `schema.sql` + these three together = "everything needed to reproduce the evaluation environment."
 
 ### Pagination
 
 - `/feed` uses Spring Data's `Page<Post>` with a page size of 20. URL param `?page=N` (0-indexed). Template shows "Page X / Y" with prev/next buttons.
 - Custom `@Query` with explicit `countQuery` — Hibernate can't auto-generate a count query from a `JOIN FETCH`, so we supply one.
+
+### Timezone handling (short but worth 1 paragraph in Chapter 4)
+
+- **Storage: UTC.** Postgres `timestamptz` columns store every `created_at` value in UTC internally, regardless of client session timezone. Industry best practice — decouples the stored value from any particular locale.
+- **Display: Europe/London.** `application.properties` sets `spring.jpa.properties.hibernate.jdbc.time_zone=Europe/London`, so Hibernate converts values into the UK timezone when reading into Java `OffsetDateTime`. Templates then render `HH:mm` in local wall-clock time without any per-template timezone conversion logic.
+- **DST handled automatically** — the IANA `Europe/London` zone switches between BST and GMT on the correct dates, so timestamps never drift twice a year.
+- **Trade-off acknowledged:** this assumes all users are in the UK (fair for an FYP demo; the user-testing cohort is UK-based). A global platform would need per-user timezone preferences stored in the `users` table and applied at render time. Flag as future work in Chapter 6.
+- **Why this matters for the report:** a small, concrete example of storage-vs-display separation — the kind of engineering-discipline detail that moves a paragraph from descriptive to analytical. "Stored in UTC, displayed in Europe/London via a single Hibernate property" is exactly the level of detail Chapter 4 wants.
 
 ### For You is single-page on purpose (Chapter 3 material)
 
@@ -310,4 +333,5 @@ Surrounding both buttons: a "notice whether you're doing it because you want to,
 - **Appendix C — Risk Management:** from the original PPD.
 - **Appendix D — Code Listing:** pull from the final state of `github.com/Poaty/FYP_Test1` at submission.
 - **Appendix E — Database Schema:** paste contents of `schema.sql`.
-- **Appendix F — User Testing Survey and Responses:** screenshots of the Google Form + anonymised responses.
+- **Appendix F — Demo Dataset SQL:** paste contents of `extra_seed_data.sql` and `extra_users_data.sql` — together with schema.sql, this is "everything a marker would need to stand up the exact corpus used in evaluation."
+- **Appendix G — User Testing Survey and Responses:** screenshots of the Google Form + anonymised responses.
