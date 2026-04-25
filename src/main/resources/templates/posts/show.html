@@ -49,30 +49,68 @@
         </div>
     </div>
 
-    <!-- Comments -->
+    <!-- Comments header -->
     <h2 class="h5 mb-3" id="comments">
-        <span th:text="${#lists.size(postComments)}">0</span>
-        <span th:text="${#lists.size(postComments) == 1} ? 'comment' : 'comments'">comments</span>
+        <span th:text="${totalCommentCount}">0</span>
+        <span th:text="${totalCommentCount == 1} ? 'comment' : 'comments'">comments</span>
     </h2>
 
-    <div th:if="${#lists.isEmpty(postComments)}" class="text-muted small mb-4">
+    <div th:if="${#lists.isEmpty(topLevelComments)}" class="text-muted small mb-4">
         No comments yet. First honest reaction?
     </div>
 
-    <div th:each="c : ${postComments}" class="card border-0 shadow-sm mb-2">
-        <div class="card-body py-3">
-            <div class="d-flex justify-content-between align-items-center mb-1">
-                <strong class="small" th:text="${c.user.username}">author</strong>
-                <span class="text-muted small"
-                      th:text="${#temporals.format(c.createdAt, 'd MMM, HH:mm')}">date</span>
+    <!-- Top-level comments + their replies -->
+    <div th:each="c : ${topLevelComments}" th:id="'comment-' + ${c.id}" class="mb-3">
+
+        <!-- The top-level comment itself -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-body py-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <strong class="small" th:text="${c.user.username}">author</strong>
+                    <span class="text-muted small"
+                          th:text="${#temporals.format(c.createdAt, 'd MMM, HH:mm')}">date</span>
+                </div>
+                <p class="mb-2" style="white-space: pre-wrap;" th:text="${c.content}">comment</p>
+
+                <!-- Reply toggler -->
+                <details class="small">
+                    <summary class="text-primary" style="cursor: pointer;">Reply</summary>
+                    <form th:action="@{'/posts/' + ${post.id} + '/comments/' + ${c.id} + '/reply'}"
+                          method="post" class="mt-2">
+                        <textarea name="content" rows="2"
+                                  class="form-control form-control-sm mb-2"
+                                  th:classappend="${replyError != null and replyParentId == c.id} ? 'is-invalid' : ''"
+                                  th:text="${replyParentId == c.id} ? ${replyDraft} : ''"
+                                  placeholder="Reply..."
+                                  required minlength="1" maxlength="2000"></textarea>
+                        <div th:if="${replyError != null and replyParentId == c.id}"
+                             class="invalid-feedback d-block" th:text="${replyError}">error</div>
+                        <button type="submit" class="btn btn-sm btn-primary">Send reply</button>
+                    </form>
+                </details>
             </div>
-            <p class="mb-0" style="white-space: pre-wrap;" th:text="${c.content}">comment</p>
+        </div>
+
+        <!-- Replies, indented under the parent -->
+        <div th:if="${repliesByParent.containsKey(c.id)}" class="ms-4 mt-2">
+            <div th:each="r : ${repliesByParent.get(c.id)}"
+                 th:id="'comment-' + ${r.id}"
+                 class="card border-0 shadow-sm mb-2">
+                <div class="card-body py-2 ps-3 border-start border-3 border-secondary-subtle">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <strong class="small" th:text="${r.user.username}">replier</strong>
+                        <span class="text-muted small"
+                              th:text="${#temporals.format(r.createdAt, 'd MMM, HH:mm')}">date</span>
+                    </div>
+                    <p class="mb-0 small" style="white-space: pre-wrap;" th:text="${r.content}">reply</p>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- New comment form -->
+    <!-- New top-level comment form -->
     <form th:action="@{'/posts/' + ${post.id} + '/comments'}"
-          th:object="${commentForm}" method="post" class="mt-4">
+          th:object="${commentForm}" method="post" class="mt-4 pt-3 border-top">
         <div class="mb-2">
             <label for="content" class="form-label fw-semibold">Add your take</label>
             <textarea id="content" th:field="*{content}" rows="3"

@@ -16,12 +16,14 @@ import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 /**
- * Just one endpoint: POST /posts/{postId}/comments.
+ *   POST /posts/{postId}/comments                   -- new top-level comment
+ *   POST /posts/{postId}/comments/{parentId}/reply  -- one-level reply
  *
- * GET for the single-post page lives on PostController.show (keeps the post
- * page's read logic in one place).
+ * GET for the show page lives on PostController.show. We don't allow
+ * replies-to-replies; that's enforced here, not in the DB.
  */
 @Controller
 public class CommentController {
@@ -36,6 +38,7 @@ public class CommentController {
         this.users = users;
     }
 
+    /** New top-level comment on a post. */
     @PostMapping("/posts/{postId}/comments")
     public String create(@PathVariable Long postId,
                          @AuthenticationPrincipal AppUserDetails me,
@@ -43,19 +46,12 @@ public class CommentController {
                          BindingResult result,
                          Model model) {
 
-        // Validation failed (empty or too long) -- re-render the show page with the errors.
-        // Need the post with author + movie joined so Thymeleaf can render without
-        // lazy-loading exploding (open-in-view is off).
+        // Validation failed -- re-render the show page with errors and the
+        // user's typed text intact. Need to repopulate the model.
         if (result.hasErrors()) {
-            Optional<Post> found = posts.findByIdWithAuthor(postId);
-            if (found.isEmpty()) return "redirect:/feed?notfound";
-            Post post = found.get();
-            model.addAttribute("post", post);
-            model.addAttribute("postComments", comments.findByPostOrderByCreatedAtAsc(post));
-            return "posts/show";
+            return repopulateShowPage(postId, model);
         }
 
-        // Happy path -- just need a reference to the Post for the FK.
         Optional<Post> postRef = posts.findById(postId);
         if (postRef.isEmpty()) return "redirect:/feed?notfound";
 
@@ -65,7 +61,76 @@ public class CommentController {
         c.setContent(form.getContent());
         comments.save(c);
 
-        // Send them back to the same post, anchored to the new comment area.
         return "redirect:/posts/" + postId + "#comments";
+    }
+
+    /**
+     * Reply to a top-level comment. Rejects replies-to-replies (one level only)
+     * and replies on a different post than the URL.
+     */
+    @PostMapping("/posts/{postId}/comments/{parentId}/reply")
+    public String reply(@PathVariable Long postId,
+                        @PathVariable Long parentId,
+                        @AuthenticationPrincipal AppUserDetails me,
+                        @Valid @ModelAttribute("replyForm") CreateCommentForm form,
+                        BindingResult result,
+                        RedirectAttributes flash) {
+
+        Optional<Comment> parentOpt = comments.findById(parentId);
+        if (parentOpt.isEmpty()) return "redirect:/posts/" + postId + "?error=notfound";
+        Comment parent = parentOpt.get();
+
+        // Sanity: parent must belong to this post.
+        if (!parent.getPost().getId().equals(postId)) {
+            return "redirect:/posts/" + postId + "?error=mismatch";
+        }
+        // One-level enforcement: cannot reply to a reply.
+        if (!parent.isTopLevel()) {
+            return "redirect:/posts/" + postId + "?error=nested";
+        }
+
+        // Validation failed -- redirect with flash attributes so the show page
+        // can re-render the form with the user's draft text intact.
+        if (result.hasErrors()) {
+            flash.addFlashAttribute("replyError",
+                    result.getFieldError("content") != null
+                            ? result.getFieldError("content").getDefaultMessage()
+                            : "Write something");
+            flash.addFlashAttribute("replyDraft", form.getContent());
+            flash.addFlashAttribute("replyParentId", parentId);
+            return "redirect:/posts/" + postId + "#comment-" + parentId;
+        }
+
+        Comment c = new Comment();
+        c.setPost(parent.getPost());
+        c.setUser(users.getReferenceById(me.getId()));
+        c.setParent(parent);
+        c.setContent(form.getContent());
+        comments.save(c);
+
+        return "redirect:/posts/" + postId + "#comment-" + parentId;
+    }
+
+    /** Re-render the show page after a top-level-comment validation error.
+     *  Mirrors PostController.show's model setup. */
+    private String repopulateShowPage(Long postId, Model model) {
+        Optional<Post> found = posts.findByIdWithAuthor(postId);
+        if (found.isEmpty()) return "redirect:/feed?notfound";
+        Post post = found.get();
+
+        var topLevel = comments.findTopLevelByPost(post);
+        var topLevelIds = topLevel.stream().map(Comment::getId).toList();
+        var repliesByParent = topLevelIds.isEmpty()
+                ? java.util.Map.<Long, java.util.List<Comment>>of()
+                : comments.findRepliesByParentIds(topLevelIds).stream()
+                    .collect(java.util.stream.Collectors.groupingBy(c -> c.getParent().getId()));
+
+        model.addAttribute("post", post);
+        model.addAttribute("topLevelComments", topLevel);
+        model.addAttribute("repliesByParent", repliesByParent);
+        long total = topLevel.size()
+                + repliesByParent.values().stream().mapToLong(java.util.List::size).sum();
+        model.addAttribute("totalCommentCount", total);
+        return "posts/show";
     }
 }

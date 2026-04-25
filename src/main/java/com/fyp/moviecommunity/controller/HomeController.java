@@ -3,6 +3,7 @@ package com.fyp.moviecommunity.controller;
 import com.fyp.moviecommunity.model.Post;
 import com.fyp.moviecommunity.repository.CommentRepository;
 import com.fyp.moviecommunity.repository.PostRepository;
+import com.fyp.moviecommunity.service.CommentService;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,10 +19,13 @@ public class HomeController {
 
     private final PostRepository posts;
     private final CommentRepository comments;
+    private final CommentService commentService;
 
-    public HomeController(PostRepository posts, CommentRepository comments) {
+    public HomeController(PostRepository posts, CommentRepository comments,
+                          CommentService commentService) {
         this.posts = posts;
         this.comments = comments;
+        this.commentService = commentService;
     }
 
     /** Send anyone hitting root straight to the feed. Spring Security bounces
@@ -43,7 +47,7 @@ public class HomeController {
         Page<Post> feedPage = posts.findPageWithAuthors(
                 PageRequest.of(Math.max(0, page), pageSize));
 
-        // Batch-fetch comment counts for every post on screen.
+        // Batch-fetch comment counts (top-level + replies) for every post.
         List<Long> ids = feedPage.getContent().stream().map(Post::getId).toList();
         Map<Long, Long> counts = new HashMap<>();
         if (!ids.isEmpty()) {
@@ -52,8 +56,14 @@ public class HomeController {
             }
         }
 
+        // Top-comment preview per post (the top-level comment with the most
+        // replies). Two batched queries inside the service.
+        Map<Long, CommentService.TopCommentPreview> topComments =
+                commentService.topCommentByPost(ids);
+
         model.addAttribute("posts", feedPage.getContent());
         model.addAttribute("commentCounts", counts);
+        model.addAttribute("topComments", topComments);
         model.addAttribute("currentPage", feedPage.getNumber());
         model.addAttribute("totalPages", feedPage.getTotalPages());
         model.addAttribute("hasPrevious", feedPage.hasPrevious());

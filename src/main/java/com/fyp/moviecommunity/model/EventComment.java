@@ -16,47 +16,33 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * A comment on a Post. Supports one-level threading via {@code parent}.
- *
- * Top-level comment: parent == null. Reply: parent != null. Replies always
- * belong to a top-level comment -- replies-to-replies are rejected at the
- * controller level (we don't want Reddit-style infinite nesting).
- *
- * Replies still carry post_id so a single "all comments for a post" query
- * works regardless of nesting, and the count includes both levels.
+ * A comment on an event. Same shape as Comment but separate so the FK to events
+ * is straightforward instead of polymorphic. Slight duplication; massive
+ * simplification.
  */
 @Entity
-@Table(name = "comments")
+@Table(name = "event_comments")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class Comment {
+public class EventComment {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "post_id", nullable = false)
-    private Post post;
+    @JoinColumn(name = "event_id", nullable = false)
+    private Event event;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
-
-    /** Null for top-level comments; set on replies. */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "parent_comment_id")
-    private Comment parent;
 
     @Column(nullable = false, columnDefinition = "text")
     private String content;
 
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;
-
-    public boolean isTopLevel() {
-        return parent == null;
-    }
 }

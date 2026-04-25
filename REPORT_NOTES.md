@@ -128,14 +128,79 @@ Rationale: standard Spring layered structure. Keeps concerns separated without b
 - **Environment variables for all secrets.** DB password and OMDb API key read via `${SUPABASE_DB_PASSWORD}` and `${OMDB_API_KEY}` in `application.properties`. Nothing sensitive is committed to git.
 - **`.gitignore` defensively blocks `*password*`, `*secret*`, `*.env`, `application-local.properties`.** Belt-and-braces against accidental commits.
 
-### Comment system
+### Watch parties / events (Day 5)
 
-- **Flat conversations, not threaded.** Comments attach to a Post, never to another Comment. Threading encourages pile-ons and reaction economies; flat discussion forces everyone to respond to the original post itself — more thesis-aligned with "honest emotional reaction over social performance."
-- **Unidirectional relationship.** `Post` doesn't hold a `List<Comment>`. Comments are only loaded when the user visits a post's detail page, not on feed queries — keeps feed rendering O(1) per post regardless of how many comments exist.
-- **Oldest-first ordering.** Matches natural reading order (blog-style, not Reddit-style). Replies land at the bottom where people are scrolling to.
-- **No comment count on feed cards** — deliberate. Showing counts cheaply would need a `GROUP BY` per feed render; left out for MVP. Defensible as "N+1 avoidance via opt-in data loading." Easy Future Work item.
-- **Error re-render preserves drafts.** If a comment fails validation, the page re-renders with the user's typed text intact. Uses the standard Spring MVC `BindingResult` pattern. Important for the UX argument — a platform asking for "honest emotional reactions" can't dump someone's 300-word typed-from-the-heart comment because it was over the character limit.
-- **URL anchor after submit** — redirects to `/posts/{id}#comments` so scroll lands on the new comment, not the top of the page.
+The PPD originally listed both "watch parties" and "events" as separate features. Discussion in development settled on a single reframing: **a watch party is an event scheduled around a film, not a real-time chat with synchronised playback.** Attendees watch on their own devices; the platform provides the "where to discuss" thread.
+
+**Why this is the right reframe:**
+- The original "≤4 person real-time chatroom" interpretation would have needed Spring WebSocket + STOMP + connection state + reconnection handling — at least 2–3 days for a feature that supports tiny groups.
+- The reframed version reuses the post + comment patterns already in the codebase. ~half a day of work for something that exercises the same architecture.
+- Watching together asynchronously (or genuinely simultaneously on personal devices) is closer to how dispersed friend groups actually consume films.
+
+**Data model — three new tables:**
+- `events` (host, movie, title, description, scheduled_for) — the watch party itself.
+- `event_attendances` (event, user, rsvped_at) — junction table for RSVPs. Surrogate `id` + unique constraint on `(event_id, user_id)` rather than a composite primary key. Same effect, less JPA ceremony.
+- `event_comments` — comments scoped to events. Kept separate from `comments` (which is scoped to posts) to avoid polymorphic associations. Slight duplication, massive simplification.
+
+**UX patterns reused from posts:**
+- Two-step creation: search OMDb for a film → fill in title/description/datetime → save. Same `/events/new` → `/events/new/details?imdbId=…` flow as `/posts/new` → `/posts/new/write`.
+- Eager `JOIN FETCH` queries for the show page so Thymeleaf doesn't trigger lazy-loads with `open-in-view=false`. Same lesson, reapplied — proves the pattern is generalisable.
+- Comment-creation re-renders the page on validation error so drafts survive.
+
+**RSVP design:**
+- Single `POST /events/{id}/rsvp` endpoint that **toggles**. If the user already has an attendance row, delete it; else insert one. Idempotent semantics — the user can mash the button and end up in a defined state.
+- Attendees list rendered comma-separated on the show page (no pagination — events realistically don't get hundreds of attendees in this kind of platform).
+
+**Date handling worth a paragraph in Chapter 4:**
+- Form input uses HTML5 `<input type="datetime-local">` — no zone in the value.
+- Controller reads as `LocalDateTime`, attaches `Europe/London` zone, stores as `OffsetDateTime` in Postgres `timestamptz` column (which then converts to UTC internally).
+- Display side benefits from the existing `hibernate.jdbc.time_zone=Europe/London` config — values render in UK local time.
+- Future work: per-user timezone preference instead of assuming Europe/London. Mention in Chapter 6.
+
+**Migration discipline:**
+- Updated `schema.sql` so fresh setups get the new tables.
+- Added `migration_add_events.sql` for the existing DB — pasteable into Supabase SQL Editor, idempotent (`IF NOT EXISTS`).
+- Pattern worth noting in Chapter 4: schema + migrations as separate concerns, both checked into the repo.
+
+**Past events visibility iteration:**
+- First pass of `/events` only listed *upcoming* events (`scheduled_for >= now`). This bit during testing — past events disappeared from view, even though their data and comment threads were intact in the DB.
+- Fix: split `/events` into two sections. **Upcoming** at the top (forward-looking, the headline use case), **Past** below (de-emphasised with reduced opacity and slight greyscale on posters), capped at the 20 most recent. Past events still take you straight to the live comment thread for that event.
+- Worth a sentence in Chapter 4: "small UX iterations during development surfaced visibility issues invisible in design — a reminder that querying `where date >= now()` is the correct DB query but the wrong UX default."
+
+### Conversation depth (was "Comment system" — design pivoted mid-build)
+
+**Original design:** strictly flat comments, no threading. Reasoning: threading encourages pile-ons; flat keeps focus on the post itself.
+
+**Revised design (during informal testing in development):** *one* level of threading is allowed. A user can reply to a top-level comment, but replies-to-replies are rejected at the controller. Two motivations for the pivot:
+
+1. **No engagement signal otherwise.** Without sub-comments, all top-level comments are equal. The "what's the most engaged take on this post?" question — which the user wanted as a feed-card preview — has no answer. One level of threading provides exactly that signal: most-replied-to top-level comment = the conversation worth surfacing.
+2. **Pile-on dynamics are a *deep* nesting problem, not a one-level problem.** Reddit and similar platforms produce echo chambers around viral comments because nesting goes 5+ levels deep, allowing a single comment to spawn its own ecosystem. Capping at one level keeps each thread anchored to the original post.
+
+**Thesis reconciliation for Chapter 3:** "Comments are flat at the top level to keep focus on the post itself. *One* level of replies is permitted because direct response to a specific take is a normal conversational mechanic that doesn't drive the pile-on dynamics deeper nesting causes." This is a *defensible iteration* — exactly the kind of "refinement during development" the marking grid rewards.
+
+**Implementation details:**
+- **Schema:** `parent_comment_id` nullable FK on the `comments` table, self-referencing. Replies still carry `post_id` so a single "all comments for this post" query covers both levels and counts work without filtering.
+- **One-level enforcement:** application layer (`CommentController.reply`) rejects replies whose parent already has a parent. Could be a Postgres trigger, but app-side keeps the schema simple.
+- **Feed-card preview:** "top comment per post" = the top-level comment with the most replies, ties broken by recency. Two batched queries inside `CommentService` regardless of feed length — N+1 avoided.
+- **Total count includes replies.** The existing `countByPostIdIn` query counts every row in `comments` for a post, so the "23 comments" badge naturally includes both levels.
+- **Reply UX.** Each top-level comment has its own collapsible reply form (`<details><summary>`), JS-free. Validation errors on replies survive a redirect via `RedirectAttributes` flash — draft preserved, no lost typing.
+- **Existing patterns reused:** unidirectional relationships (Post doesn't hold `List<Comment>`), oldest-first ordering (blog-style, not Reddit-style), the lazy-loading discipline (`JOIN FETCH` everywhere we render).
+
+**Migration:** `migration_add_comment_threading.sql` — pasteable into Supabase. Idempotent (`ADD COLUMN IF NOT EXISTS`, `DROP CONSTRAINT IF EXISTS` before `ADD CONSTRAINT`).
+
+**Worth a paragraph in Chapter 3 and another in Chapter 4.** The design pivot is honest, the implementation is clean, and "iterative refinement during development" is exactly the marking-grid criterion this hits.
+
+### Card layout consistency
+
+A small but worth-mentioning UX iteration during development.
+
+**Problem:** First pass of feed cards used Bootstrap's `row + col` layout, which defaults to `align-items: stretch` — meaning the poster column was forced to fill the height of the right column. With `object-fit: cover` on the poster image, that produced aggressive cropping on tall cards (cards with a top-comment preview were taller than cards without). Two visible issues: (1) posters looked stretched/over-cropped, (2) cards with comments were visibly bigger than cards without.
+
+**Fix:**
+- Swapped `row + col` to `d-flex align-items-start` with a **fixed-size poster** (100×150 px — standard 2:3 movie poster ratio). Posters now keep their natural aspect ratio regardless of card height.
+- **Always render the top-comment block** — when there are no comments, show a "No comments yet — be the first to react" placeholder in the same visual slot as a real preview. Eliminates the height delta between commented and uncommented cards.
+
+**Why this is worth mentioning in Chapter 4:** small consistency fixes accumulate into a feed that feels considered rather than uneven. The placeholder block also doubles as a soft CTA for engagement on cold posts, which is mildly thesis-aligned (encouraging contribution rather than passive scrolling).
 
 ### Lazy loading discipline (important Chapter 4 material)
 

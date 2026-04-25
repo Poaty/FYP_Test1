@@ -107,12 +107,12 @@ public class PostController {
     }
 
     /**
-     * Single-post page. Shows the post + movie header, all comments oldest-first,
-     * and a form to add one (if the viewer is logged in -- Spring Security will
-     * have bounced anonymous users already).
+     * Single-post page. Shows the post + movie header, top-level comments
+     * grouped with their replies, and forms for both new comments and replies.
      *
-     * findByIdWithAuthor eagerly joins user + movie; without that, rendering
-     * explodes because open-in-view is off and Thymeleaf can't lazy-load.
+     * Two batched queries for the comment tree: top-level + replies. Java
+     * groups replies under their parent so the template doesn't need to do
+     * lookups per comment.
      */
     @GetMapping("/{id}")
     public String show(@PathVariable Long id, Model model) {
@@ -122,7 +122,26 @@ public class PostController {
         }
         Post post = found.get();
         model.addAttribute("post", post);
-        model.addAttribute("postComments", comments.findByPostOrderByCreatedAtAsc(post));
+
+        // Build the threaded comment view: top-level + replies grouped by parent.
+        java.util.List<com.fyp.moviecommunity.model.Comment> topLevel =
+                comments.findTopLevelByPost(post);
+        java.util.List<Long> topLevelIds = topLevel.stream()
+                .map(com.fyp.moviecommunity.model.Comment::getId)
+                .toList();
+        java.util.Map<Long, java.util.List<com.fyp.moviecommunity.model.Comment>> repliesByParent =
+                topLevelIds.isEmpty()
+                        ? java.util.Map.of()
+                        : comments.findRepliesByParentIds(topLevelIds).stream()
+                            .collect(java.util.stream.Collectors.groupingBy(
+                                    c -> c.getParent().getId()));
+
+        model.addAttribute("topLevelComments", topLevel);
+        model.addAttribute("repliesByParent", repliesByParent);
+        long totalCommentCount = topLevel.size()
+                + repliesByParent.values().stream().mapToLong(java.util.List::size).sum();
+        model.addAttribute("totalCommentCount", totalCommentCount);
+
         if (!model.containsAttribute("commentForm")) {
             model.addAttribute("commentForm", new CreateCommentForm());
         }

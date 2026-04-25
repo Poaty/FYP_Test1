@@ -16,6 +16,8 @@
                class="btn btn-outline-light btn-sm">Feed</a>
             <a sec:authorize="isAuthenticated()" th:href="@{/for-you}"
                class="btn btn-outline-light btn-sm">For You</a>
+            <a sec:authorize="isAuthenticated()" th:href="@{/events}"
+               class="btn btn-outline-light btn-sm">Watch parties</a>
             <a sec:authorize="isAuthenticated()" th:href="@{/posts/new}"
                class="btn btn-primary btn-sm">+ New post</a>
             <span sec:authorize="isAuthenticated()" class="text-white-50 mx-2">
