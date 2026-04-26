@@ -49,12 +49,16 @@ public class PostController {
         this.comments = comments;
     }
 
-    /** Search page. Empty box on first load; with ?q= we render OMDb hits. */
+    /** Search page. Empty box on first load; with ?q= we render OMDb hits.
+     *  Paginated -- OMDb returns 10 per page, so common queries like "Barbie"
+     *  span multiple pages. */
     @GetMapping("/new")
-    public String newPost(@RequestParam(required = false) String q, Model model) {
+    public String newPost(@RequestParam(required = false) String q,
+                          @RequestParam(defaultValue = "1") int page,
+                          Model model) {
         model.addAttribute("q", q);
         if (q != null && !q.isBlank()) {
-            model.addAttribute("results", movies.search(q));
+            model.addAttribute("searchPage", movies.searchPaged(q, page));
         }
         return "posts/new";
     }

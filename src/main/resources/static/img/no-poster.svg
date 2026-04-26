@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 300" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3d4d5e"/>
+      <stop offset="1" stop-color="#1f2a35"/>
+    </linearGradient>
+  </defs>
+  <rect width="200" height="300" fill="url(#bg)"/>
+  <!-- Film reel -->
+  <g transform="translate(100,130)" stroke-linecap="round">
+    <circle cx="0" cy="0" r="55" fill="none" stroke="#7d8d9e" stroke-width="3"/>
+    <circle cx="0" cy="0" r="48" fill="none" stroke="#7d8d9e" stroke-width="1.5"/>
+    <circle cx="0" cy="0" r="12" fill="#7d8d9e"/>
+    <circle cx="0" cy="-32" r="6" fill="#3d4d5e"/>
+    <circle cx="28" cy="-16" r="6" fill="#3d4d5e"/>
+    <circle cx="28" cy="16" r="6" fill="#3d4d5e"/>
+    <circle cx="0" cy="32" r="6" fill="#3d4d5e"/>
+    <circle cx="-28" cy="16" r="6" fill="#3d4d5e"/>
+    <circle cx="-28" cy="-16" r="6" fill="#3d4d5e"/>
+  </g>
+  <text x="100" y="240" font-family="Verdana, Arial, sans-serif" font-size="22" font-weight="bold"
+        text-anchor="middle" fill="#9dadbe">No poster</text>
+</svg>

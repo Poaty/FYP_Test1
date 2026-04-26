@@ -18,11 +18,12 @@
             <div class="col-md-3">
                 <img th:if="${event.movie.posterUrl != null}" th:src="${event.movie.posterUrl}"
                      class="img-fluid rounded-start" alt="poster"
+                     onerror="this.src='/img/no-poster.svg'; this.onerror=null;"
                      style="width: 100%; object-fit: cover;">
-                <div th:unless="${event.movie.posterUrl != null}"
-                     class="bg-secondary h-100 d-flex align-items-center justify-content-center text-white p-4">
-                    no poster
-                </div>
+                <img th:unless="${event.movie.posterUrl != null}"
+                     th:src="@{/img/no-poster.svg}" alt="No poster available"
+                     class="img-fluid rounded-start"
+                     style="width: 100%; object-fit: cover;">
             </div>
             <div class="col-md-9">
                 <div class="card-body">

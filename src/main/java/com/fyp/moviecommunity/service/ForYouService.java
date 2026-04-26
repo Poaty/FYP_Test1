@@ -96,12 +96,39 @@ public class ForYouService {
      */
     public record FeedSlot(Post post, boolean unconventional, long commentCount, String label) {}
 
+    /**
+     * Bundle of "everything the algorithm produced for this size" -- the
+     * raw pool, the comment counts, the popularity-only baseline (top N
+     * by score, no interleaving), and the diversity-weighted feed.
+     *
+     * Used by MetricsService for the Chapter 5 quantitative comparison.
+     */
+    public record Diagnostics(
+            List<Post> pool,
+            Map<Long, Long> commentCounts,
+            List<Post> baselineFeed,    // top N by score, no diversity
+            List<FeedSlot> diverseFeed  // 1:4 diversity-weighted
+    ) {}
+
     /** Build a feed of up to `size` posts, 1:N diversity-weighted. */
     public List<FeedSlot> buildFeed(int size) {
-        if (size <= 0) return List.of();
+        return diagnostics(size).diverseFeed();
+    }
+
+    /**
+     * Run the full algorithm and also produce the popularity-only baseline
+     * for comparison. Same input pool, same scoring -- only difference is
+     * whether the diversity slots are filled.
+     */
+    public Diagnostics diagnostics(int size) {
+        if (size <= 0) {
+            return new Diagnostics(List.of(), Map.of(), List.of(), List.of());
+        }
 
         List<Post> pool = posts.findRecentWithAuthors(PageRequest.of(0, poolSize));
-        if (pool.isEmpty()) return List.of();
+        if (pool.isEmpty()) {
+            return new Diagnostics(List.of(), Map.of(), List.of(), List.of());
+        }
 
         // Batch-fetch the two signals we need.
         List<Long> postIds = pool.stream().map(Post::getId).toList();
@@ -113,17 +140,32 @@ public class ForYouService {
         Map<Long, Long> commentCounts = toMap(comments.countByPostIdIn(postIds));
         Map<String, Long> moviePostCounts = toMap(posts.countByMovieImdbIdIn(imdbIds));
 
+        // Shared scoring pass.
+        Instant now = Instant.now();
+        Map<Post, Double> scores = pool.stream().collect(Collectors.toMap(
+                Function.identity(),
+                p -> score(p, commentCounts, moviePostCounts, now)));
+
+        // Popularity-only baseline: just the top N by score, no interleaving.
+        List<Post> baseline = pool.stream()
+                .sorted(Comparator.<Post>comparingDouble(scores::get).reversed())
+                .limit(size)
+                .toList();
+
+        List<FeedSlot> diverse = buildDiverseFeed(pool, commentCounts, scores, size);
+        return new Diagnostics(pool, commentCounts, baseline, diverse);
+    }
+
+    /** The real work of buildFeed, factored so diagnostics() can share it. */
+    private List<FeedSlot> buildDiverseFeed(List<Post> pool,
+                                            Map<Long, Long> commentCounts,
+                                            Map<Post, Double> scores,
+                                            int size) {
+
         // Popularity threshold: 20% (default) of the peak comment count from the
         // last 7 days. max(1, ...) so even a sleepy DB has a sensible floor.
         long popularThreshold = computePopularThreshold(pool, commentCounts);
         log.debug("For You: popular threshold = {} comments", popularThreshold);
-
-        // Score every post in the pool.
-        Instant now = Instant.now();
-        Map<Post, Double> scores = pool.stream()
-                .collect(Collectors.toMap(
-                        Function.identity(),
-                        p -> score(p, commentCounts, moviePostCounts, now)));
 
         // Rank DESC for popular slots, ASC for quiet picks.
         List<Post> byPopular = pool.stream()

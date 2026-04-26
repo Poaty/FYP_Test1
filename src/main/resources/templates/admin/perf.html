@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Performance · Movie Community</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+</head>
+<body class="bg-light">
+
+<nav th:replace="~{fragments/navbar :: navbar}"></nav>
+
+<main class="container py-4" style="max-width: 960px;">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div>
+            <h1 class="h3 mb-1">Performance</h1>
+            <p class="text-muted small mb-0">
+                Live counters since this app process started. Refresh to update.
+            </p>
+        </div>
+        <a th:href="@{/admin/perf.csv}" class="btn btn-outline-primary btn-sm">Download CSV</a>
+    </div>
+
+    <!-- Honest banner: numbers include seeded demo activity. -->
+    <div class="alert alert-light border small mb-4">
+        <strong>Note:</strong> Counters include a seeded baseline of synthetic activity
+        injected at startup so the dashboard has something to show before any live
+        clicking. Real requests pile on top of these numbers as you click around.
+        Disable with <code>app.demo-data.enabled=false</code> in
+        <code>application.properties</code> for a pristine session.
+    </div>
+
+    <!-- OMDb -->
+    <h2 class="h5 mt-4">OMDb API</h2>
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <div class="text-muted small">Calls made</div>
+                    <div class="h4 mb-0" th:text="${snapshot.omdbCalls}">0</div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-muted small">Mean latency</div>
+                    <div class="h4 mb-0">
+                        <span th:text="${#numbers.formatDecimal(snapshot.omdbMeanMs, 1, 0)}">0</span>
+                        <span class="text-muted small">ms</span>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-muted small">Cache hit rate</div>
+                    <div class="h4 mb-0">
+                        <span th:text="${#numbers.formatDecimal(snapshot.cacheHitRatePct, 1, 1)}">0.0</span>
+                        <span class="text-muted small">%</span>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-muted small">Lookups</div>
+                    <div class="h4 mb-0" th:text="${snapshot.cacheHits} + ' / ' + ${snapshot.cacheLookups}">0 / 0</div>
+                </div>
+            </div>
+            <p class="small text-muted mt-3 mb-0">
+                Cache rate = MovieService.findOrFetch hits / total findOrFetch calls.
+                OMDb search() always calls OMDb (no cache for free-text queries) and is included in "calls made".
+            </p>
+        </div>
+    </div>
+
+    <!-- Per-route timing -->
+    <h2 class="h5 mt-4">Request timing</h2>
+    <p class="text-muted small">
+        Rolling window of the most recent 200 requests per route. Static assets and the admin perf pages themselves are excluded.
+    </p>
+
+    <div th:if="${#maps.isEmpty(snapshot.routes)}" class="alert alert-light border">
+        No requests recorded yet. Click around the site, then refresh this page.
+    </div>
+
+    <div th:unless="${#maps.isEmpty(snapshot.routes)}" class="card border-0 shadow-sm mb-4">
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead class="table-light">
+                <tr>
+                    <th>Route</th>
+                    <th class="text-end">Hits</th>
+                    <th class="text-end">Mean ms</th>
+                    <th class="text-end">p50</th>
+                    <th class="text-end">p95</th>
+                    <th class="text-end">Min</th>
+                    <th class="text-end">Max</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="entry : ${snapshot.routes}">
+                    <td><code th:text="${entry.key}">/feed</code></td>
+                    <td class="text-end" th:text="${entry.value.requestCount}">0</td>
+                    <td class="text-end fw-semibold" th:text="${#numbers.formatDecimal(entry.value.meanMs, 1, 0)}">0</td>
+                    <td class="text-end" th:text="${entry.value.p50Ms}">0</td>
+                    <td class="text-end" th:text="${entry.value.p95Ms}">0</td>
+                    <td class="text-end text-muted" th:text="${entry.value.minMs}">0</td>
+                    <td class="text-end text-muted" th:text="${entry.value.maxMs}">0</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- DB queries note -->
+    <h2 class="h5 mt-4">DB queries per render (manual verification)</h2>
+    <div class="card border-0 shadow-sm">
+        <div class="card-body small">
+            <p>
+                The /feed and /for-you endpoints use <strong>JOIN FETCH</strong> queries that
+                return all needed data in a fixed number of SQL statements (typically 2&ndash;3
+                per render), regardless of how many posts are in the database. This is by
+                design &mdash; the alternative (lazy-loading per row) would N+1 with the
+                feed size.
+            </p>
+            <p class="mb-2">
+                <strong>To verify for the report:</strong>
+            </p>
+            <ol class="mb-2">
+                <li>Set <code>spring.jpa.show-sql=true</code> in <code>application.properties</code> temporarily.</li>
+                <li>Restart, hit /feed once, count the SQL statements logged.</li>
+                <li>Repeat with the DB at different sizes (10, 50, 100 posts) &mdash; count should remain constant.</li>
+            </ol>
+            <p class="text-muted mb-0">
+                We don't track this counter automatically because Hibernate's request-scoped
+                statistics are awkward to capture cleanly &mdash; the manual count is more
+                trustworthy and good enough for the report.
+            </p>
+        </div>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/footer :: footer}"></footer>
+
+</body>
+</html>

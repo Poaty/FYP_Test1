@@ -40,14 +40,13 @@
             <div class="flex-shrink-0 me-1">
                 <img th:if="${post.movie.posterUrl != null}" th:src="${post.movie.posterUrl}"
                      alt="poster"
+                     onerror="this.src='/img/no-poster.svg'; this.onerror=null;"
                      style="width: 180px; height: 270px; object-fit: cover;
                             border-top-left-radius: 0.375rem; border-bottom-left-radius: 0.375rem;">
-                <div th:unless="${post.movie.posterUrl != null}"
-                     class="bg-secondary d-flex align-items-center justify-content-center text-white"
-                     style="width: 180px; height: 270px;
+                <img th:unless="${post.movie.posterUrl != null}"
+                     th:src="@{/img/no-poster.svg}" alt="No poster available"
+                     style="width: 180px; height: 270px; object-fit: cover;
                             border-top-left-radius: 0.375rem; border-bottom-left-radius: 0.375rem;">
-                    no poster
-                </div>
             </div>
             <!-- Content takes the rest -->
             <div class="card-body flex-grow-1">

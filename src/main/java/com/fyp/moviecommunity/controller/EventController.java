@@ -86,13 +86,14 @@ public class EventController {
         return "events/list";
     }
 
-    /** Step 1 of new-event creation: search OMDb for the film. */
+    /** Step 1 of new-event creation: search OMDb for the film. Paginated. */
     @GetMapping("/events/new")
-    public String search(@RequestParam(required = false) String q, Model model) {
+    public String search(@RequestParam(required = false) String q,
+                         @RequestParam(defaultValue = "1") int page,
+                         Model model) {
         model.addAttribute("q", q);
         if (q != null && !q.isBlank()) {
-            List<OmdbSearchItem> results = movies.search(q);
-            model.addAttribute("results", results);
+            model.addAttribute("searchPage", movies.searchPaged(q, page));
         }
         return "events/new";
     }

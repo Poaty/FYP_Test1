@@ -3,11 +3,14 @@ package com.fyp.moviecommunity.service;
 import com.fyp.moviecommunity.model.Movie;
 import com.fyp.moviecommunity.omdb.OmdbClient;
 import com.fyp.moviecommunity.omdb.OmdbSearchItem;
+import com.fyp.moviecommunity.omdb.OmdbSearchResponse;
 import com.fyp.moviecommunity.repository.MovieRepository;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+// Note: PerformanceMetrics import is in the same package, no import needed.
 
 /**
  * Finds movies. Caches OMDb hits in our DB.
@@ -27,15 +30,44 @@ public class MovieService {
 
     private final MovieRepository movies;
     private final OmdbClient omdb;
+    private final PerformanceMetrics perf;
 
-    public MovieService(MovieRepository movies, OmdbClient omdb) {
+    public MovieService(MovieRepository movies, OmdbClient omdb, PerformanceMetrics perf) {
         this.movies = movies;
         this.omdb = omdb;
+        this.perf = perf;
     }
 
     /** Live search -- we don't cache search results, users type free text. */
     public List<OmdbSearchItem> search(String query) {
         return omdb.search(query);
+    }
+
+    /** A page of search results (10 per page, OMDb's fixed page size).
+     *  Includes total result count so the UI can render pagination. */
+    public SearchPage searchPaged(String query, int page) {
+        var resp = omdb.search(query, Math.max(1, page));
+        int total = parseInt(resp.getTotalResults());
+        int totalPages = (int) Math.ceil(total / 10.0);
+        List<OmdbSearchItem> items = resp.getSearch() == null ? List.of() : resp.getSearch();
+        return new SearchPage(items, total, Math.max(1, page), Math.max(1, totalPages));
+    }
+
+    /** Returned by searchPaged -- everything the template needs to show pagination. */
+    public record SearchPage(
+            List<OmdbSearchItem> items,
+            int totalResults,
+            int currentPage,
+            int totalPages
+    ) {
+        public boolean hasPrevious() { return currentPage > 1; }
+        public boolean hasNext()     { return currentPage < totalPages; }
+        public boolean isEmpty()     { return items.isEmpty(); }
+    }
+
+    private static int parseInt(String s) {
+        if (s == null || s.isBlank()) return 0;
+        try { return Integer.parseInt(s); } catch (NumberFormatException e) { return 0; }
     }
 
     /**
@@ -45,7 +77,11 @@ public class MovieService {
     @Transactional
     public Optional<Movie> findOrFetch(String imdbId) {
         Optional<Movie> cached = movies.findById(imdbId);
-        if (cached.isPresent()) return cached;
+        if (cached.isPresent()) {
+            perf.recordCacheHit();
+            return cached;
+        }
+        perf.recordCacheMiss();
 
         return omdb.getByImdbId(imdbId).map(dto -> {
             Movie m = new Movie();
