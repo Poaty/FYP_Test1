@@ -89,7 +89,7 @@ Four tables: `users`, `movies`, `posts`, `comments`.
 - **Foreign keys with `ON DELETE CASCADE`.** Removing a user cleanly removes their posts and comments. Keeps the database consistent without application-layer cleanup code.
 - **Check constraints on content length** (`posts.content` 1–5000 chars, `comments.content` 1–2000, `users.username` 3–30). Makes the DB the source of truth for content limits, not just the form validator.
 - **Timestamps set by Postgres (`default now()`).** Java doesn't control `created_at` — avoids clock-skew bugs and keeps the entity simpler.
-- `Evidence: schema.sql in the repo root.`
+- `Evidence: sql/schema.sql in the repo.`
 
 ### Java package layout
 
@@ -158,8 +158,8 @@ The PPD originally listed both "watch parties" and "events" as separate features
 - Future work: per-user timezone preference instead of assuming Europe/London. Mention in Chapter 6.
 
 **Migration discipline:**
-- Updated `schema.sql` so fresh setups get the new tables.
-- Added `migration_add_events.sql` for the existing DB — pasteable into Supabase SQL Editor, idempotent (`IF NOT EXISTS`).
+- Updated `sql/schema.sql` so fresh setups get the new tables.
+- Added `sql/migration_add_events.sql` for the existing DB — pasteable into Supabase SQL Editor, idempotent (`IF NOT EXISTS`).
 - Pattern worth noting in Chapter 4: schema + migrations as separate concerns, both checked into the repo.
 
 **Past events visibility iteration:**
@@ -186,7 +186,7 @@ The PPD originally listed both "watch parties" and "events" as separate features
 - **Reply UX.** Each top-level comment has its own collapsible reply form (`<details><summary>`), JS-free. Validation errors on replies survive a redirect via `RedirectAttributes` flash — draft preserved, no lost typing.
 - **Existing patterns reused:** unidirectional relationships (Post doesn't hold `List<Comment>`), oldest-first ordering (blog-style, not Reddit-style), the lazy-loading discipline (`JOIN FETCH` everywhere we render).
 
-**Migration:** `migration_add_comment_threading.sql` — pasteable into Supabase. Idempotent (`ADD COLUMN IF NOT EXISTS`, `DROP CONSTRAINT IF EXISTS` before `ADD CONSTRAINT`).
+**Migration:** `sql/migration_add_comment_threading.sql` — pasteable into Supabase. Idempotent (`ADD COLUMN IF NOT EXISTS`, `DROP CONSTRAINT IF EXISTS` before `ADD CONSTRAINT`).
 
 **Worth a paragraph in Chapter 3 and another in Chapter 4.** The design pivot is honest, the implementation is clean, and "iterative refinement during development" is exactly the marking-grid criterion this hits.
 
@@ -277,12 +277,12 @@ Realistic seed data lives across three files:
 1. **`DemoDataSeeder.java`** (Java, runs on app startup). Two idempotent phases.
    - Phase 1 (checked against `users.alice`): 5 users, 10 movies, 16 posts, 20 comments.
    - Phase 2 (checked against the Matrix movie being cached): +5 movies, +15 posts, +30 comments concentrated on a handful of posts to lift peak engagement into double digits.
-2. **`extra_seed_data.sql`** (pasted into Supabase SQL Editor): +50 posts, +100 comments, all from the original 5 seeded users. Engagement distribution designed on purpose:
+2. **`sql/extra_seed_data.sql`** (pasted into Supabase SQL Editor): +50 posts, +100 comments, all from the original 5 seeded users. Engagement distribution designed on purpose:
    - 8 hot posts with 6 comments each
    - 8 medium with 3 each
    - 14 light with 2 each
    - 20 quiet posts with zero — explicit long-tail fodder for the For You algorithm
-3. **`extra_users_data.sql`**: +30 users, +20 posts from them, +30 comments from them across existing hot threads. Fixes the "5 people in a Discord server" feel that the earlier seed had. All 30 new users inherit alice's BCrypt hash via `INSERT ... SELECT`, so they share password `demo1234` without any hardcoded hash literal.
+3. **`sql/extra_users_data.sql`**: +30 users, +20 posts from them, +30 comments from them across existing hot threads. Fixes the "5 people in a Discord server" feel that the earlier seed had. All 30 new users inherit alice's BCrypt hash via `INSERT ... SELECT`, so they share password `demo1234` without any hardcoded hash literal.
 
 **Total seeded corpus:** ~35 users, ~101 posts, ~180 comments. Peak comment count ~8. Popular threshold (20% of peak) lands at 2 — a meaningful cut-off rather than the degenerate "anything with a single comment" we started with.
 
@@ -293,7 +293,7 @@ Realistic seed data lives across three files:
 - **Genre variety** — combined corpus covers drama, sci-fi, horror, thriller, Korean drama, animation, comedy, fantasy, war, crime. Shannon-entropy metric in Chapter 5 will have real variance to measure across ~15 genres.
 - **Realistic engagement skew** — a few hot posts, many quiet ones. Matches natural distribution on real platforms, which is what the For You algorithm was designed to correct against.
 - **All seeded passwords = `demo1234`.** Fine for dev; flagged for Chapter 6 future work.
-- **Evidence:** `DemoDataSeeder.java`, `extra_seed_data.sql`, `extra_users_data.sql` — all three belong in the appendix code listing. `schema.sql` + these three together = "everything needed to reproduce the evaluation environment."
+- **Evidence:** `DemoDataSeeder.java`, `sql/extra_seed_data.sql`, `sql/extra_users_data.sql` — all three belong in the appendix code listing. `sql/schema.sql` + these three together = "everything needed to reproduce the evaluation environment."
 
 ### Pagination
 
@@ -372,6 +372,55 @@ Surrounding both buttons: a "notice whether you're doing it because you want to,
   - Supabase RLS + reduced-privilege DB role (security hardening)
   - Horizontal scaling stability tests (original PPD W30 milestone)
 
+### Admin moderation (Day 6)
+
+The PPD originally listed full report/flag systems, queue-based moderation, and ban workflows. That's a feature in its own right — easily a week of work. Took a smaller approach that still hits the LSEPI commitment.
+
+**Design:**
+- Single boolean `is_admin` flag on the `users` table. Granted manually via SQL update — no in-app promotion flow yet (deliberate; adding admin-grants-admin would need its own audit trail and confirmation UX).
+- `AppUserDetails.getAuthorities()` returns both `ROLE_USER` and `ROLE_ADMIN` for admin users.
+- Spring Security gates `/admin/**` to `hasRole('ADMIN')`.
+- `AdminController` exposes four POST endpoints — delete post, delete comment (top-level or reply), delete event, delete event comment. POST not DELETE because HTML forms don't natively support DELETE method.
+- Cascades happen at the DB level (`ON DELETE CASCADE` on every FK in `sql/schema.sql`), so deleting a post automatically removes its comments and replies; deleting an event removes RSVPs and the comment thread.
+- Delete buttons render via Thymeleaf's `sec:authorize="hasRole('ADMIN')"` — invisible to regular users, visible to admins on `/posts/{id}` and `/events/{id}` show pages. Native browser `confirm()` for the safety prompt — no custom-modal JS needed.
+
+**What this hits:**
+- **Social LSEPI:** community moderation. The PPD called for "moderation, report mechanisms and clear guidelines that each users must follow." The guidelines page and admin moderation together cover the first and third; report mechanisms remain future work.
+- **BCS Code of Conduct (Professional LSEPI):** acting in users' best interests means content that violates the published guidelines can actually be removed, not just disapproved-of in the abstract.
+
+**Iterated on the limitations (Day 6 second pass):**
+
+After the first pass, three of the originally-listed limitations were closed:
+
+1. **Author can delete their own content.** Posts, comments (top-level or reply), watch parties (host only), and event messages — each has a separate non-admin endpoint (e.g. `POST /posts/{id}/delete`). Owner-or-admin distinction enforced in the controller, not via Spring Security expressions, so the rules live with the entity logic.
+2. **Reason-required prompt on admin delete.** Admin delete buttons trigger a JS-native `prompt()` for a reason (3–500 characters validated client-side and server-side). No custom modal infrastructure — uses the browser's built-in dialog.
+3. **Audit log.** New `moderation_actions` table records every admin deletion with `(admin_user_id, action_type, target_type, target_id, target_summary, reason, created_at)`. Survives admin account deletion via `ON DELETE SET NULL` on the admin FK. Viewable at `/admin/log`, latest 100 actions newest-first, in a small table view linked from a yellow "Admin" button in the navbar.
+
+**Still acknowledged as future work in Chapter 6 (intentionally cut on time grounds):**
+- **Soft delete with undo.** Significant refactor — every query that returns posts/comments/events would need to filter `WHERE deleted_at IS NULL`. Trade-off: implementation simplicity now vs. recoverability later. For an MVP, hard-delete with audit log is defensible.
+- **User flag/report mechanism.** Substantial new feature (table + user UI + admin queue). Admins currently notice content directly or are emailed. Listed as the highest-priority Future Work item.
+- **Promote-to-admin in the UI.** Manual SQL grant remains. Adding a promote-other-users flow requires its own audit/confirm path. Low frequency, low priority.
+
+**Migrations:** `sql/migration_add_admin_flag.sql` (is_admin flag), then `sql/migration_add_moderation_log.sql` (audit table). Both idempotent. Initial admin granted with one manual SQL update.
+
+**Why this iteration is worth a paragraph in Chapter 4:** the Day 6 first-pass deliberately scoped admin moderation small (one boolean, four endpoints, no audit). The second pass extended it based on review of the limitations themselves — author-delete to close a basic-UX gap, reason+audit to give admin actions accountability. **A clean example of "first pass small, second pass extended where it matters" — exactly the iterative-development narrative the marking grid rewards.**
+
+### Static policy pages (Day 6)
+
+Three plain-HTML pages added to honour LSEPI commitments from the PPD:
+
+- **`/privacy`** — what data is stored, where, how it's protected (BCrypt + TLS), explicit no-trackers / no-ads / no-data-sharing statement, and DPA 2018 / GDPR rights (request copy, request deletion, withdraw consent). Acknowledges that account deletion is currently a manual email-the-author process — flagged as future work. Hits Legal LSEPI (DPA / GDPR transparency).
+- **`/terms`** — eligibility (18+), content rules, project context (this is a dissertation project, no SLA, no warranty, "don't post anything you'd be upset to lose"). Plain English, intentionally short. Hits Ethical LSEPI (informed consent — users know what they're signing up for).
+- **`/guidelines`** — community norms tied directly to the thesis. Honest takes over performance, disagree-with-takes-not-people, no hate or harassment, no spam, spoiler-tag convention, and an explicit explanation of why threading is one-level only. Hits Social LSEPI (clear community guidelines, scaffolding for moderation).
+
+**Implementation:**
+- `StaticPagesController` with three `GET` endpoints, all `permitAll()` in Spring Security.
+- Footer fragment (`templates/fragments/footer.html`) included on `/login`, `/signup`, `/feed`, `/for-you`, `/events`, and the three static pages — links to the policies are accessible from every "front-of-house" surface.
+- Signup page links to all three with explicit consent copy: "By creating an account you agree to our terms, community guidelines, and confirm you've read the privacy notice."
+
+**Why these are worth their own subsection in Chapter 4 / Chapter 6:**
+Static-content pages are not technically interesting, but the LSEPI argument they enable is. The PPD made specific commitments — *user consent*, *transparency about data*, *clear community guidelines*. Without these pages those commitments are aspirational. With them, every LSEPI tick has a URL behind it the marker can navigate to.
+
 ## LSEPIs — evidence log
 
 ### Legal
@@ -397,6 +446,6 @@ Surrounding both buttons: a "notice whether you're doing it because you want to,
 - **Appendix B — Rest of Year 3 Gantt:** from the original PPD.
 - **Appendix C — Risk Management:** from the original PPD.
 - **Appendix D — Code Listing:** pull from the final state of `github.com/Poaty/FYP_Test1` at submission.
-- **Appendix E — Database Schema:** paste contents of `schema.sql`.
-- **Appendix F — Demo Dataset SQL:** paste contents of `extra_seed_data.sql` and `extra_users_data.sql` — together with schema.sql, this is "everything a marker would need to stand up the exact corpus used in evaluation."
+- **Appendix E — Database Schema:** paste contents of `sql/schema.sql`.
+- **Appendix F — Demo Dataset SQL:** paste contents of `sql/extra_seed_data.sql` and `sql/extra_users_data.sql` — together with `sql/schema.sql`, this is "everything a marker would need to stand up the exact corpus used in evaluation."
 - **Appendix G — User Testing Survey and Responses:** screenshots of the Google Form + anonymised responses.

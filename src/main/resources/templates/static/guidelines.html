@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Guidelines · Movie Community</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+</head>
+<body class="bg-light">
+
+<nav th:replace="~{fragments/navbar :: navbar}"></nav>
+
+<main class="container py-4" style="max-width: 760px;">
+    <h1 class="h3 mb-1">Community guidelines</h1>
+    <p class="text-muted mb-4">
+        This platform is built around honest, emotional reactions to films —
+        not performance, not consensus, not popularity. Some norms that follow
+        from that.
+    </p>
+
+    <h2 class="h5 mt-4">Be honest, not performative</h2>
+    <p>
+        Say what you <em>actually</em> thought. Disagreeing with a popular take
+        is welcome — that's the whole reason this platform exists. Posting an
+        opinion you don't hold because it'll be liked is the thing the platform
+        is designed to resist. There are no like counts here on purpose.
+    </p>
+
+    <h2 class="h5 mt-4">Disagree with takes, not people</h2>
+    <p>
+        Argue with the opinion. Don't attack the person. "I disagree because…"
+        is fine. "You're stupid for thinking that" is not.
+    </p>
+
+    <h2 class="h5 mt-4">No hate speech or harassment</h2>
+    <p>
+        Targeting people based on race, gender, religion, sexuality, disability,
+        nationality, or anything similar is grounds for immediate removal of the
+        content and possibly the account. We don't host this.
+    </p>
+
+    <h2 class="h5 mt-4">No spam or self-promotion</h2>
+    <p>
+        Posts and comments should be about the films themselves. No links to
+        external products, services, or content unless directly relevant to the
+        film being discussed.
+    </p>
+
+    <h2 class="h5 mt-4">Spoilers</h2>
+    <p>
+        If you're discussing plot points beyond the trailer, start the post
+        or comment with <code>spoiler:</code> so people can choose to read on.
+    </p>
+
+    <h2 class="h5 mt-4">A note on threading</h2>
+    <p>
+        You can reply to a top-level comment, but not to a reply. Keeping
+        threads shallow keeps focus on the original post and prevents the
+        pile-on dynamics deeper nesting tends to create. This is a deliberate
+        design choice, not an oversight.
+    </p>
+
+    <h2 class="h5 mt-4">If you see something</h2>
+    <p class="small text-muted">
+        Reporting and admin moderation are part of the next iteration of the
+        platform — for now, email the project author at
+        <strong>N1205202@my.ntu.ac.uk</strong> if a post or comment crosses a
+        line and we'll handle it.
+    </p>
+</main>
+
+<footer th:replace="~{fragments/footer :: footer}"></footer>
+
+</body>
+</html>

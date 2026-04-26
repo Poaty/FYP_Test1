@@ -40,6 +40,20 @@ public class EventCommentController {
         this.users = users;
     }
 
+    /** Author can delete their own message on an event. */
+    @PostMapping("/events/{eventId}/comments/{commentId}/delete")
+    public String deleteOwn(@PathVariable Long eventId,
+                            @PathVariable Long commentId,
+                            @AuthenticationPrincipal AppUserDetails me) {
+        Optional<EventComment> ec = comments.findById(commentId);
+        if (ec.isEmpty()) return "redirect:/events/" + eventId;
+        if (!ec.get().getUser().getId().equals(me.getId())) {
+            return "redirect:/events/" + eventId + "?error=notyours";
+        }
+        comments.deleteById(commentId);
+        return "redirect:/events/" + eventId;
+    }
+
     @PostMapping("/events/{eventId}/comments")
     public String create(@PathVariable Long eventId,
                          @AuthenticationPrincipal AppUserDetails me,

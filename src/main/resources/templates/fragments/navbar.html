@@ -20,6 +20,8 @@
                class="btn btn-outline-light btn-sm">Watch parties</a>
             <a sec:authorize="isAuthenticated()" th:href="@{/posts/new}"
                class="btn btn-primary btn-sm">+ New post</a>
+            <a sec:authorize="hasRole('ADMIN')" th:href="@{/admin/log}"
+               class="btn btn-warning btn-sm" title="Admin moderation log">Admin</a>
             <span sec:authorize="isAuthenticated()" class="text-white-50 mx-2">
                 <span class="text-white" sec:authentication="name">username</span>
             </span>

@@ -11,6 +11,7 @@ create table if not exists users (
   email         text unique not null,
   password_hash text not null,
   bio           text,
+  is_admin      boolean not null default false,
   created_at    timestamptz not null default now()
 );
 
@@ -107,6 +108,23 @@ create table if not exists event_comments (
 );
 
 create index if not exists event_comments_event_idx on event_comments(event_id);
+
+-- ============================================================
+-- Moderation actions (audit log of admin deletions)
+-- ============================================================
+create table if not exists moderation_actions (
+  id              bigserial primary key,
+  admin_user_id   bigint references users(id) on delete set null,
+  action_type     text   not null,    -- e.g. 'DELETE_POST'
+  target_type     text   not null,    -- POST | COMMENT | EVENT | EVENT_COMMENT
+  target_id       bigint not null,
+  target_summary  text,               -- short snippet of what was deleted
+  reason          text   not null check (char_length(reason) between 3 and 500),
+  created_at      timestamptz not null default now()
+);
+
+create index if not exists moderation_actions_created_idx on moderation_actions(created_at desc);
+create index if not exists moderation_actions_admin_idx   on moderation_actions(admin_user_id);
 
 -- ============================================================
 -- Notes for the report (Implementation chapter)

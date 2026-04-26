@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- Shared footer fragment. Pages include via:
+       <footer th:replace="~{fragments/footer :: footer}"></footer>
+-->
+<footer th:fragment="footer" class="container py-4 mt-5 border-top text-muted small">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+            Movie Community · NTU final-year project
+        </div>
+        <div>
+            <a th:href="@{/guidelines}" class="text-muted text-decoration-none me-3">Guidelines</a>
+            <a th:href="@{/privacy}"    class="text-muted text-decoration-none me-3">Privacy</a>
+            <a th:href="@{/terms}"      class="text-muted text-decoration-none">Terms</a>
+        </div>
+    </div>
+</footer>
+
+</body>
+</html>

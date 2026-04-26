@@ -46,12 +46,21 @@
         </div>
 
         <button type="submit" class="btn btn-primary w-100">Create account</button>
+        <p class="text-muted small text-center mt-3 mb-0">
+            By creating an account you agree to our
+            <a th:href="@{/terms}">terms</a>,
+            <a th:href="@{/guidelines}">community guidelines</a>,
+            and confirm you've read the
+            <a th:href="@{/privacy}">privacy notice</a>.
+        </p>
     </form>
 
     <p class="text-muted text-center mt-4 mb-0">
         Already have an account? <a th:href="@{/login}">Log in</a>.
     </p>
 </main>
+
+<footer th:replace="~{fragments/footer :: footer}"></footer>
 
 </body>
 </html>

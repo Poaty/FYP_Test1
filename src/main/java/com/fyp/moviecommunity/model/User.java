@@ -15,7 +15,7 @@ import lombok.Setter;
 /**
  * A registered user of the platform.
  *
- * <p>Maps to the {@code users} table (schema.sql). We store the BCrypt
+ * <p>Maps to the {@code users} table (sql/schema.sql). We store the BCrypt
  * hash only, never the raw password. {@code createdAt} is populated
  * by Postgres via {@code default now()}, so it's marked non-insertable
  * here -- Hibernate won't try to send a value.
@@ -43,6 +43,11 @@ public class User {
 
     @Column(columnDefinition = "text")
     private String bio;
+
+    /** Admins can delete other people's posts/comments/events.
+     *  Granted manually with a SQL update; no in-app way to promote yet. */
+    @Column(name = "is_admin", nullable = false)
+    private boolean admin = false;
 
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <head>
     <meta charset="UTF-8">
     <title th:text="${event.title} + ' · Movie Community'">Event</title>
@@ -31,9 +32,27 @@
                         <span th:if="${event.movie.year != null}" th:text="' (' + ${event.movie.year} + ')'"> (year)</span>
                         · hosted by <strong th:text="${event.host.username}">host</strong>
                     </p>
-                    <p class="mb-2">
+                    <p class="mb-2 d-flex align-items-center gap-2 flex-wrap">
                         <span class="badge bg-secondary"
                               th:text="${#temporals.format(event.scheduledFor, 'EEEE d MMMM yyyy, HH:mm')}">when</span>
+                        <!-- Host can delete their own event -->
+                        <form th:if="${iAmHost}"
+                              th:action="@{'/events/' + ${event.id} + '/delete'}"
+                              method="post" class="m-0"
+                              onsubmit="return confirm('Cancel this watch party and remove its whole thread?');">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Cancel event</button>
+                        </form>
+                        <!-- Admin can delete any event -->
+                        <form sec:authorize="hasRole('ADMIN')"
+                              th:unless="${iAmHost}"
+                              th:action="@{'/admin/events/' + ${event.id} + '/delete'}"
+                              method="post" class="m-0">
+                            <input type="hidden" name="reason">
+                            <button type="submit" class="btn btn-sm btn-outline-warning"
+                                    onclick="return askReason(this.form, 'Delete this watch party (admin)?');">
+                                Delete event (admin)
+                            </button>
+                        </form>
                     </p>
                     <p th:if="${event.description != null and !#strings.isEmpty(event.description)}"
                        class="card-text small text-muted mb-0" style="white-space: pre-wrap;"
@@ -85,12 +104,45 @@
         <div class="card-body py-3">
             <div class="d-flex justify-content-between align-items-center mb-1">
                 <strong class="small" th:text="${c.user.username}">author</strong>
-                <span class="text-muted small"
-                      th:text="${#temporals.format(c.createdAt, 'd MMM, HH:mm')}">date</span>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="text-muted small"
+                          th:text="${#temporals.format(c.createdAt, 'd MMM, HH:mm')}">date</span>
+                    <!-- Author of this message can delete -->
+                    <form th:if="${currentUserId != null and currentUserId == c.user.id}"
+                          th:action="@{'/events/' + ${event.id} + '/comments/' + ${c.id} + '/delete'}"
+                          method="post" class="m-0"
+                          onsubmit="return confirm('Delete your message?');">
+                        <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2">Delete</button>
+                    </form>
+                    <!-- Admin can delete any message (with reason) -->
+                    <form sec:authorize="hasRole('ADMIN')"
+                          th:unless="${currentUserId != null and currentUserId == c.user.id}"
+                          th:action="@{'/admin/event-comments/' + ${c.id} + '/delete'}"
+                          method="post" class="m-0">
+                        <input type="hidden" name="reason">
+                        <button type="submit" class="btn btn-sm btn-outline-warning py-0 px-2"
+                                onclick="return askReason(this.form, 'Delete this message (admin)?');">
+                            Delete (admin)
+                        </button>
+                    </form>
+                </div>
             </div>
             <p class="mb-0" style="white-space: pre-wrap;" th:text="${c.content}">message</p>
         </div>
     </div>
+
+    <!-- Admin reason-prompt helper. -->
+    <script th:inline="javascript">
+        function askReason(form, msg) {
+            var r = prompt(msg + '\n\nReason for moderation:');
+            if (r === null) return false;
+            r = r.trim();
+            if (r.length < 3) { alert('Please enter a reason (3+ characters).'); return false; }
+            if (r.length > 500) { alert('Keep the reason under 500 characters.'); return false; }
+            form.reason.value = r;
+            return true;
+        }
+    </script>
 
     <!-- New comment form -->
     <form th:action="@{'/events/' + ${event.id} + '/comments'}"

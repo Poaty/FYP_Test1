@@ -76,6 +76,19 @@ public class PostController {
         return "posts/write";
     }
 
+    /** Author can delete their own post. */
+    @PostMapping("/{id}/delete")
+    public String deleteOwn(@PathVariable Long id,
+                            @AuthenticationPrincipal AppUserDetails me) {
+        Optional<Post> p = posts.findById(id);
+        if (p.isEmpty()) return "redirect:/feed";
+        if (!p.get().getUser().getId().equals(me.getId())) {
+            return "redirect:/posts/" + id + "?error=notyours";
+        }
+        posts.deleteById(id);
+        return "redirect:/feed";
+    }
+
     /** Actually save the post. */
     @PostMapping
     public String create(@AuthenticationPrincipal AppUserDetails me,
@@ -115,13 +128,17 @@ public class PostController {
      * lookups per comment.
      */
     @GetMapping("/{id}")
-    public String show(@PathVariable Long id, Model model) {
+    public String show(@PathVariable Long id,
+                       @AuthenticationPrincipal AppUserDetails me,
+                       Model model) {
         Optional<Post> found = posts.findByIdWithAuthor(id);
         if (found.isEmpty()) {
             return "redirect:/feed?notfound";
         }
         Post post = found.get();
         model.addAttribute("post", post);
+        model.addAttribute("currentUserId", me != null ? me.getId() : null);
+        model.addAttribute("iAmPostAuthor", me != null && me.getId().equals(post.getUser().getId()));
 
         // Build the threaded comment view: top-level + replies grouped by parent.
         java.util.List<com.fyp.moviecommunity.model.Comment> topLevel =

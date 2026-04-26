@@ -152,16 +152,32 @@ public class EventController {
         List<EventAttendance> attending = attendances.findByEventOrderByRsvpedAtAsc(event);
         boolean iAmAttending = attending.stream()
                 .anyMatch(a -> a.getUser().getId().equals(me.getId()));
+        boolean iAmHost = me != null && me.getId().equals(event.getHost().getId());
 
         model.addAttribute("event", event);
         model.addAttribute("attendees", attending);
         model.addAttribute("attendingCount", attending.size());
         model.addAttribute("iAmAttending", iAmAttending);
+        model.addAttribute("iAmHost", iAmHost);
+        model.addAttribute("currentUserId", me != null ? me.getId() : null);
         model.addAttribute("eventComments", eventComments.findByEventOrderByCreatedAtAsc(event));
         if (!model.containsAttribute("commentForm")) {
             model.addAttribute("commentForm", new CreateEventCommentForm());
         }
         return "events/show";
+    }
+
+    /** Host can delete their own event. */
+    @PostMapping("/events/{id}/delete")
+    public String deleteOwn(@PathVariable Long id,
+                            @AuthenticationPrincipal AppUserDetails me) {
+        Optional<Event> ev = events.findById(id);
+        if (ev.isEmpty()) return "redirect:/events";
+        if (!ev.get().getHost().getId().equals(me.getId())) {
+            return "redirect:/events/" + id + "?error=notyours";
+        }
+        events.deleteById(id);
+        return "redirect:/events";
     }
 
     /** Toggle RSVP. If you're already in, this removes you; otherwise adds you. */

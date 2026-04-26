@@ -111,6 +111,21 @@ public class CommentController {
         return "redirect:/posts/" + postId + "#comment-" + parentId;
     }
 
+    /** Author can delete their own comment (top-level or reply). Cascades
+     *  through any replies via the DB FK. */
+    @PostMapping("/comments/{id}/delete")
+    public String deleteOwn(@PathVariable Long id,
+                            @AuthenticationPrincipal AppUserDetails me) {
+        Optional<Comment> c = comments.findById(id);
+        if (c.isEmpty()) return "redirect:/feed";
+        if (!c.get().getUser().getId().equals(me.getId())) {
+            return "redirect:/posts/" + c.get().getPost().getId() + "?error=notyours";
+        }
+        Long postId = c.get().getPost().getId();
+        comments.deleteById(id);
+        return "redirect:/posts/" + postId;
+    }
+
     /** Re-render the show page after a top-level-comment validation error.
      *  Mirrors PostController.show's model setup. */
     private String repopulateShowPage(Long postId, Model model) {
