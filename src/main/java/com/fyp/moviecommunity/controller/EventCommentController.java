@@ -2,6 +2,7 @@ package com.fyp.moviecommunity.controller;
 
 import com.fyp.moviecommunity.dto.CreateEventCommentForm;
 import com.fyp.moviecommunity.model.Event;
+import com.fyp.moviecommunity.model.EventAttendance;
 import com.fyp.moviecommunity.model.EventComment;
 import com.fyp.moviecommunity.repository.EventAttendanceRepository;
 import com.fyp.moviecommunity.repository.EventCommentRepository;
@@ -9,6 +10,7 @@ import com.fyp.moviecommunity.repository.EventRepository;
 import com.fyp.moviecommunity.repository.UserRepository;
 import com.fyp.moviecommunity.security.AppUserDetails;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
@@ -18,10 +20,6 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 
-/**
- * One endpoint: POST /events/{eventId}/comments. Mirrors CommentController
- * for posts.
- */
 @Controller
 public class EventCommentController {
 
@@ -40,16 +38,18 @@ public class EventCommentController {
         this.users = users;
     }
 
-    /** Author can delete their own message on an event. */
     @PostMapping("/events/{eventId}/comments/{commentId}/delete")
     public String deleteOwn(@PathVariable Long eventId,
                             @PathVariable Long commentId,
                             @AuthenticationPrincipal AppUserDetails me) {
         Optional<EventComment> ec = comments.findById(commentId);
         if (ec.isEmpty()) return "redirect:/events/" + eventId;
+
+        // only the author can remove their event comment
         if (!ec.get().getUser().getId().equals(me.getId())) {
             return "redirect:/events/" + eventId + "?error=notyours";
         }
+
         comments.deleteById(commentId);
         return "redirect:/events/" + eventId;
     }
@@ -62,14 +62,20 @@ public class EventCommentController {
                          Model model) {
 
         if (result.hasErrors()) {
-            // Re-render the show page with the error inline. Need the event,
-            // attendees, and existing comments populated again.
             Optional<Event> found = events.findByIdWithHost(eventId);
             if (found.isEmpty()) return "redirect:/events?notfound";
             Event event = found.get();
-            var attending = attendances.findByEventOrderByRsvpedAtAsc(event);
-            boolean iAmAttending = attending.stream()
-                    .anyMatch(a -> a.getUser().getId().equals(me.getId()));
+
+            List<EventAttendance> attending = attendances.findByEventOrderByRsvpedAtAsc(event);
+
+            // rebuild the event page so the form error can show
+            boolean iAmAttending = false;
+            for (EventAttendance a : attending) {
+                if (a.getUser().getId().equals(me.getId())) {
+                    iAmAttending = true;
+                    break;
+                }
+            }
 
             model.addAttribute("event", event);
             model.addAttribute("attendees", attending);
@@ -79,11 +85,12 @@ public class EventCommentController {
             return "events/show";
         }
 
-        Optional<Event> found = events.findById(eventId);
-        if (found.isEmpty()) return "redirect:/events?notfound";
+        Event event = events.findById(eventId).orElse(null);
+        if (event == null) return "redirect:/events?notfound";
 
+        // save the new event comment
         EventComment c = new EventComment();
-        c.setEvent(found.get());
+        c.setEvent(event);
         c.setUser(users.getReferenceById(me.getId()));
         c.setContent(form.getContent());
         comments.save(c);

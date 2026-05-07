@@ -1,4 +1,4 @@
--- Movie Community Platform — database schema
+-- ReelRooms — database schema
 -- Paste this into Supabase → SQL Editor → New query → Run
 -- Safe to re-run (uses IF NOT EXISTS)
 

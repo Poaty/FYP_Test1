@@ -11,17 +11,16 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 /**
- * Injects a realistic-looking baseline into the performance counters on
- * startup, so the dashboard at /admin/perf has numbers to show before any
- * live clicking around. Real requests pile on top -- nothing is overwritten.
+ * Seeds the in-memory performance metrics with synthetic samples when
+ * demo data is enabled. This makes the /admin/perf dashboard non-empty
+ * during local testing.
  *
- * Disable with app.demo-data.enabled=false (same flag as the user/post seeders).
+ * The values are synthetic and should not be treated as real measurements.
+ * Production figures come from the live HandlerInterceptor recording
+ * actual request latencies.
  *
- * Numbers are deterministic (fixed Random seed). Distributions chosen to
- * match what a Spring Boot app talking to a remote Supabase Postgres from
- * a UK dev machine would realistically produce: tight cluster around the
- * mean, with the occasional slower outlier skewing p95 a bit. Cache hit
- * rate sits around 90% which is the storyline -- the cache layer pays off.
+ * Disable with app.demo-data.enabled=false. Real requests record on top
+ * of these samples; nothing is overwritten.
  */
 @Component
 @Order(Ordered.LOWEST_PRECEDENCE) // run AFTER DemoDataSeeder
@@ -44,30 +43,21 @@ public class PerformanceSeeder implements CommandLineRunner {
             log.info("Performance seeding disabled (app.demo-data.enabled=false).");
             return;
         }
-        log.info("Seeding performance metrics with demo activity...");
+        log.info("Seeding performance metrics with synthetic samples...");
 
-        // Deterministic seed = same numbers every restart, easier to talk about.
+        // Fixed seed for reproducibility across restarts.
         Random r = new Random(20260426L);
 
         // ---- OMDb counters --------------------------------------------------
-        // ~80 calls over a development session. External HTTP from UK to OMDb
-        // typically sits around 250-320 ms with the occasional slow outlier.
         for (int i = 0; i < 78; i++) {
-            long ms = realistic(r, 285, 70);
+            long ms = sample(r, 285, 70);
             metrics.recordOmdbCall(ms * 1_000_000L);
         }
 
-        // Cache layer: ~90% hit rate. Storyline: caching pays off heavily
-        // because most movie lookups repeat (popular films get reposted).
         for (int i = 0; i < 712; i++) metrics.recordCacheHit();
         for (int i = 0; i < 78; i++)  metrics.recordCacheMiss();
 
         // ---- Per-route timings ----------------------------------------------
-        // Realistic patterns:
-        //   * /login lightest (no DB beyond auth check)
-        //   * /feed and /events are healthy: 1-2 batched JOIN FETCH queries
-        //   * /for-you slightly slower (algorithm + comment-count batches)
-        //   * /admin/metrics noticeably slower (runs the algorithm twice)
         seedRoute(r, "/feed",                184,  92, 38);
         seedRoute(r, "/for-you",             142, 138, 55);
         seedRoute(r, "/events",               64,  84, 28);
@@ -83,23 +73,22 @@ public class PerformanceSeeder implements CommandLineRunner {
         seedRoute(r, "/posts/{postId}/comments", 47, 88, 32);
         seedRoute(r, "/events/{id}/rsvp",     22,  61, 24);
 
-        log.info("Performance seed complete. Visit /admin/perf to see the dashboard.");
+        log.info("Performance seed complete.");
     }
 
-    /** Add `count` synthetic samples for a route. */
     private void seedRoute(Random r, String route, int count, int meanMs, int stdMs) {
         for (int i = 0; i < count; i++) {
-            long ms = realistic(r, meanMs, stdMs);
+            long ms = sample(r, meanMs, stdMs);
             metrics.recordRequest(route, ms * 1_000_000L);
         }
     }
 
     /**
-     * Realistic single sample: roughly Gaussian around mean, but with a 5%
-     * chance of being a slower outlier (1.5x-3x normal) to skew p95 a bit
-     * the way real web traffic actually behaves.
+     * Single synthetic latency sample: Gaussian around the mean with a 5%
+     * chance of being multiplied 1.5x-3x to introduce tail-end outliers.
+     * Floor of 15 ms so values stay positive.
      */
-    private static long realistic(Random r, int meanMs, int stdMs) {
+    private static long sample(Random r, int meanMs, int stdMs) {
         double base = meanMs + r.nextGaussian() * stdMs;
         if (r.nextDouble() < 0.05) {
             base *= 1.5 + r.nextDouble() * 1.5;

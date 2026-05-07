@@ -2,6 +2,7 @@ package com.fyp.moviecommunity.controller;
 
 import com.fyp.moviecommunity.dto.CreateCommentForm;
 import com.fyp.moviecommunity.dto.CreatePostForm;
+import com.fyp.moviecommunity.model.Comment;
 import com.fyp.moviecommunity.model.Movie;
 import com.fyp.moviecommunity.model.Post;
 import com.fyp.moviecommunity.repository.CommentRepository;
@@ -10,7 +11,10 @@ import com.fyp.moviecommunity.repository.UserRepository;
 import com.fyp.moviecommunity.security.AppUserDetails;
 import com.fyp.moviecommunity.service.MovieService;
 import jakarta.validation.Valid;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -22,16 +26,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
-/**
- * The post-writing flow is two pages:
- *
- *   GET /posts/new                -> search box; with ?q=... also shows OMDb results
- *   GET /posts/new/write?imdbId=X -> shows the chosen movie + textarea
- *   POST /posts                    -> saves the post, bounces to /feed
- *
- * Why two pages: keeps things simple. Could be one page with AJAX later,
- * but for the MVP the round-trip is totally fine.
- */
 @Controller
 @RequestMapping("/posts")
 public class PostController {
@@ -49,29 +43,27 @@ public class PostController {
         this.comments = comments;
     }
 
-    /** Search page. Empty box on first load; with ?q= we render OMDb hits.
-     *  Paginated -- OMDb returns 10 per page, so common queries like "Barbie"
-     *  span multiple pages. */
     @GetMapping("/new")
     public String newPost(@RequestParam(required = false) String q,
                           @RequestParam(defaultValue = "1") int page,
                           Model model) {
         model.addAttribute("q", q);
+
+        // search omdb before writing the post
         if (q != null && !q.isBlank()) {
             model.addAttribute("searchPage", movies.searchPaged(q, page));
         }
         return "posts/new";
     }
 
-    /** The write page. They've already picked a movie on the previous screen. */
     @GetMapping("/new/write")
     public String writeForm(@RequestParam String imdbId, Model model) {
-        Optional<Movie> movie = movies.findOrFetch(imdbId);
-        if (movie.isEmpty()) {
-            // Shouldn't happen unless they hand-edited the URL. Kick them back.
-            return "redirect:/posts/new?error=notfound";
-        }
-        model.addAttribute("movie", movie.get());
+        Movie movie = movies.findOrFetch(imdbId).orElse(null);
+        if (movie == null) return "redirect:/posts/new?error=notfound";
+
+        model.addAttribute("movie", movie);
+
+        // keep the selected movie on the form
         if (!model.containsAttribute("postForm")) {
             CreatePostForm form = new CreatePostForm();
             form.setImdbId(imdbId);
@@ -80,41 +72,38 @@ public class PostController {
         return "posts/write";
     }
 
-    /** Author can delete their own post. */
     @PostMapping("/{id}/delete")
     public String deleteOwn(@PathVariable Long id,
                             @AuthenticationPrincipal AppUserDetails me) {
-        Optional<Post> p = posts.findById(id);
-        if (p.isEmpty()) return "redirect:/feed";
-        if (!p.get().getUser().getId().equals(me.getId())) {
+        Post p = posts.findById(id).orElse(null);
+        if (p == null) return "redirect:/feed";
+
+        // only the post author can delete it here
+        if (!p.getUser().getId().equals(me.getId())) {
             return "redirect:/posts/" + id + "?error=notyours";
         }
+
         posts.deleteById(id);
         return "redirect:/feed";
     }
 
-    /** Actually save the post. */
     @PostMapping
     public String create(@AuthenticationPrincipal AppUserDetails me,
                          @Valid @ModelAttribute("postForm") CreatePostForm form,
                          BindingResult result,
                          Model model) {
 
-        // Validation failed -- re-render the write page with the errors.
-        // We need to re-fetch the movie so the template can render it.
         if (result.hasErrors()) {
+            // put the movie back after validation fails
             movies.findOrFetch(form.getImdbId()).ifPresent(m -> model.addAttribute("movie", m));
             return "posts/write";
         }
 
-        // Grab (or fetch + cache) the movie. Bail out if OMDb somehow forgot about it.
         Movie movie = movies.findOrFetch(form.getImdbId())
                 .orElseThrow(() -> new IllegalStateException(
                         "Movie " + form.getImdbId() + " vanished between pages"));
 
         Post post = new Post();
-        // getReferenceById returns a proxy with just the id -- no extra SELECT, Hibernate
-        // just uses the id for the FK.
         post.setUser(users.getReferenceById(me.getId()));
         post.setMovie(movie);
         post.setContent(form.getContent());
@@ -123,46 +112,41 @@ public class PostController {
         return "redirect:/feed";
     }
 
-    /**
-     * Single-post page. Shows the post + movie header, top-level comments
-     * grouped with their replies, and forms for both new comments and replies.
-     *
-     * Two batched queries for the comment tree: top-level + replies. Java
-     * groups replies under their parent so the template doesn't need to do
-     * lookups per comment.
-     */
     @GetMapping("/{id}")
     public String show(@PathVariable Long id,
                        @AuthenticationPrincipal AppUserDetails me,
                        Model model) {
         Optional<Post> found = posts.findByIdWithAuthor(id);
-        if (found.isEmpty()) {
-            return "redirect:/feed?notfound";
-        }
+        if (found.isEmpty()) return "redirect:/feed?notfound";
         Post post = found.get();
+
+        // post pages can be viewed while logged out
+        Long meId = (me != null) ? me.getId() : null;
+        boolean iAmPostAuthor = (meId != null) && meId.equals(post.getUser().getId());
+
+        List<Comment> topLevel = comments.findTopLevelByPost(post);
+        List<Long> topLevelIds = topLevel.stream().map(Comment::getId).toList();
+
+        // replies grouped by their top level comment
+        Map<Long, List<Comment>> repliesByParent;
+        if (topLevelIds.isEmpty()) {
+            repliesByParent = Map.of();
+        } else {
+            repliesByParent = comments.findRepliesByParentIds(topLevelIds).stream()
+                    .collect(Collectors.groupingBy(c -> c.getParent().getId()));
+        }
+
+        long totalCommentCount = topLevel.size()
+                + repliesByParent.values().stream().mapToLong(List::size).sum();
+
         model.addAttribute("post", post);
-        model.addAttribute("currentUserId", me != null ? me.getId() : null);
-        model.addAttribute("iAmPostAuthor", me != null && me.getId().equals(post.getUser().getId()));
-
-        // Build the threaded comment view: top-level + replies grouped by parent.
-        java.util.List<com.fyp.moviecommunity.model.Comment> topLevel =
-                comments.findTopLevelByPost(post);
-        java.util.List<Long> topLevelIds = topLevel.stream()
-                .map(com.fyp.moviecommunity.model.Comment::getId)
-                .toList();
-        java.util.Map<Long, java.util.List<com.fyp.moviecommunity.model.Comment>> repliesByParent =
-                topLevelIds.isEmpty()
-                        ? java.util.Map.of()
-                        : comments.findRepliesByParentIds(topLevelIds).stream()
-                            .collect(java.util.stream.Collectors.groupingBy(
-                                    c -> c.getParent().getId()));
-
+        model.addAttribute("currentUserId", meId);
+        model.addAttribute("iAmPostAuthor", iAmPostAuthor);
         model.addAttribute("topLevelComments", topLevel);
         model.addAttribute("repliesByParent", repliesByParent);
-        long totalCommentCount = topLevel.size()
-                + repliesByParent.values().stream().mapToLong(java.util.List::size).sum();
         model.addAttribute("totalCommentCount", totalCommentCount);
 
+        // blank comment form unless validation already added one
         if (!model.containsAttribute("commentForm")) {
             model.addAttribute("commentForm", new CreateCommentForm());
         }

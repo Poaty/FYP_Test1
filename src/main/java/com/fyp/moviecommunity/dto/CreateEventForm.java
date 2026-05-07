@@ -9,18 +9,12 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.springframework.format.annotation.DateTimeFormat;
 
-/**
- * Form-backing object for creating a watch party.
- *
- * scheduledFor uses LocalDateTime because the HTML5 datetime-local input
- * doesn't include a timezone -- we attach the user's zone (Europe/London)
- * in the controller before persisting.
- */
 @Getter
 @Setter
 @NoArgsConstructor
 public class CreateEventForm {
 
+    // movie picked on the search page
     @NotBlank(message = "Pick a movie first")
     private String imdbId;
 
@@ -31,6 +25,7 @@ public class CreateEventForm {
     @Size(max = 2000, message = "Up to 2000 characters")
     private String description;
 
+    // html datetime-local posts this format
     @NotNull(message = "Pick a date and time")
     @DateTimeFormat(pattern = "yyyy-MM-dd'T'HH:mm")
     private LocalDateTime scheduledFor;

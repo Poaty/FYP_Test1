@@ -6,7 +6,6 @@ import com.fyp.moviecommunity.model.Event;
 import com.fyp.moviecommunity.model.EventAttendance;
 import com.fyp.moviecommunity.model.Movie;
 import com.fyp.moviecommunity.model.User;
-import com.fyp.moviecommunity.omdb.OmdbSearchItem;
 import com.fyp.moviecommunity.repository.EventAttendanceRepository;
 import com.fyp.moviecommunity.repository.EventCommentRepository;
 import com.fyp.moviecommunity.repository.EventRepository;
@@ -31,18 +30,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
-/**
- * Watch parties.
- *
- *   GET  /events                       -- upcoming events list
- *   GET  /events/new                   -- search a movie to schedule
- *   GET  /events/new/details?imdbId=X  -- title + description + datetime form
- *   POST /events                       -- save the event, redirect to its page
- *   GET  /events/{id}                  -- show event + attendees + comment thread
- *   POST /events/{id}/rsvp             -- toggle RSVP (idempotent)
- *
- * POST /events/{id}/comments lives on EventCommentController.
- */
 @Controller
 public class EventController {
 
@@ -66,16 +53,14 @@ public class EventController {
         this.users = users;
     }
 
-    /** Upcoming + past events list. Past section gives users a way back to
-     *  comment threads on events that have already happened. */
     @GetMapping("/events")
     public String list(Model model) {
         OffsetDateTime now = OffsetDateTime.now();
         List<Event> upcoming = events.findUpcoming(now);
+
+        // only show a small set of older events
         List<Event> past = events.findPast(now, PageRequest.of(0, 20));
 
-        // Combined attendance count map for both lists. Per-event count call
-        // is fine while N is small (~20 each); batch with a GROUP BY if it grows.
         Map<Long, Long> counts = new HashMap<>();
         for (Event e : upcoming) counts.put(e.getId(), attendances.countByEvent(e));
         for (Event e : past)     counts.put(e.getId(), attendances.countByEvent(e));
@@ -86,24 +71,27 @@ public class EventController {
         return "events/list";
     }
 
-    /** Step 1 of new-event creation: search OMDb for the film. Paginated. */
     @GetMapping("/events/new")
     public String search(@RequestParam(required = false) String q,
                          @RequestParam(defaultValue = "1") int page,
                          Model model) {
         model.addAttribute("q", q);
+
+        // omdb search before making the event
         if (q != null && !q.isBlank()) {
             model.addAttribute("searchPage", movies.searchPaged(q, page));
         }
         return "events/new";
     }
 
-    /** Step 2: they picked a movie, now fill in the details. */
     @GetMapping("/events/new/details")
     public String details(@RequestParam String imdbId, Model model) {
-        Optional<Movie> movie = movies.findOrFetch(imdbId);
-        if (movie.isEmpty()) return "redirect:/events/new?error=notfound";
-        model.addAttribute("movie", movie.get());
+        Movie movie = movies.findOrFetch(imdbId).orElse(null);
+        if (movie == null) return "redirect:/events/new?error=notfound";
+
+        model.addAttribute("movie", movie);
+
+        // keep the selected film in the form
         if (!model.containsAttribute("eventForm")) {
             CreateEventForm form = new CreateEventForm();
             form.setImdbId(imdbId);
@@ -112,7 +100,6 @@ public class EventController {
         return "events/details";
     }
 
-    /** Step 3: save the event. */
     @PostMapping("/events")
     public String create(@AuthenticationPrincipal AppUserDetails me,
                          @Valid @ModelAttribute("eventForm") CreateEventForm form,
@@ -120,28 +107,28 @@ public class EventController {
                          Model model) {
 
         if (result.hasErrors()) {
+            // put the movie back on the page after validation fails
             movies.findOrFetch(form.getImdbId()).ifPresent(m -> model.addAttribute("movie", m));
             return "events/details";
         }
 
         Movie movie = movies.findOrFetch(form.getImdbId())
-                .orElseThrow(() -> new IllegalStateException("Movie vanished: " + form.getImdbId()));
-        User host = users.getReferenceById(me.getId());
+                .orElseThrow(() -> new IllegalStateException(
+                        "Movie " + form.getImdbId() + " disappeared between pages"));
 
         Event event = new Event();
-        event.setHost(host);
+        event.setHost(users.getReferenceById(me.getId()));
         event.setMovie(movie);
         event.setTitle(form.getTitle());
         event.setDescription(form.getDescription());
-        // The form gives us a LocalDateTime (no zone); attach UK time so it round-trips
-        // through Postgres timestamptz storage cleanly.
+
+        // save the posted datetime as uk time
         event.setScheduledFor(form.getScheduledFor().atZone(UK).toOffsetDateTime());
         events.save(event);
 
         return "redirect:/events/" + event.getId();
     }
 
-    /** Single event detail page. */
     @GetMapping("/events/{id}")
     public String show(@PathVariable Long id,
                        @AuthenticationPrincipal AppUserDetails me,
@@ -151,52 +138,68 @@ public class EventController {
         Event event = found.get();
 
         List<EventAttendance> attending = attendances.findByEventOrderByRsvpedAtAsc(event);
-        boolean iAmAttending = attending.stream()
-                .anyMatch(a -> a.getUser().getId().equals(me.getId()));
-        boolean iAmHost = me != null && me.getId().equals(event.getHost().getId());
+
+        // this page can be viewed while logged out
+        Long meId = (me != null) ? me.getId() : null;
+
+        boolean iAmAttending = false;
+        if (meId != null) {
+            for (EventAttendance a : attending) {
+                if (a.getUser().getId().equals(meId)) {
+                    iAmAttending = true;
+                    break;
+                }
+            }
+        }
+
+        boolean iAmHost = (meId != null) && meId.equals(event.getHost().getId());
 
         model.addAttribute("event", event);
         model.addAttribute("attendees", attending);
         model.addAttribute("attendingCount", attending.size());
         model.addAttribute("iAmAttending", iAmAttending);
         model.addAttribute("iAmHost", iAmHost);
-        model.addAttribute("currentUserId", me != null ? me.getId() : null);
+        model.addAttribute("currentUserId", meId);
         model.addAttribute("eventComments", eventComments.findByEventOrderByCreatedAtAsc(event));
+
         if (!model.containsAttribute("commentForm")) {
             model.addAttribute("commentForm", new CreateEventCommentForm());
         }
         return "events/show";
     }
 
-    /** Host can delete their own event. */
     @PostMapping("/events/{id}/delete")
     public String deleteOwn(@PathVariable Long id,
                             @AuthenticationPrincipal AppUserDetails me) {
         Optional<Event> ev = events.findById(id);
         if (ev.isEmpty()) return "redirect:/events";
+
+        // only the host can delete their event
         if (!ev.get().getHost().getId().equals(me.getId())) {
             return "redirect:/events/" + id + "?error=notyours";
         }
+
         events.deleteById(id);
         return "redirect:/events";
     }
 
-    /** Toggle RSVP. If you're already in, this removes you; otherwise adds you. */
     @PostMapping("/events/{id}/rsvp")
-    public String toggleRsvp(@PathVariable Long id, @AuthenticationPrincipal AppUserDetails me) {
-        Optional<Event> found = events.findById(id);
-        if (found.isEmpty()) return "redirect:/events?notfound";
-        Event event = found.get();
-        User user = users.getReferenceById(me.getId());
+    public String toggleRsvp(@PathVariable Long id,
+                             @AuthenticationPrincipal AppUserDetails me) {
+        Event event = events.findById(id).orElse(null);
+        if (event == null) return "redirect:/events?notfound";
 
-        Optional<EventAttendance> existing = attendances.findByEventAndUser(event, user);
-        if (existing.isPresent()) {
-            attendances.delete(existing.get());
+        User user = users.getReferenceById(me.getId());
+        Optional<EventAttendance> already = attendances.findByEventAndUser(event, user);
+
+        // rsvp button works as a toggle
+        if (already.isPresent()) {
+            attendances.delete(already.get());
         } else {
-            EventAttendance a = new EventAttendance();
-            a.setEvent(event);
-            a.setUser(user);
-            attendances.save(a);
+            EventAttendance att = new EventAttendance();
+            att.setEvent(event);
+            att.setUser(user);
+            attendances.save(att);
         }
 
         return "redirect:/events/" + id;

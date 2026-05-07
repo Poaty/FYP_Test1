@@ -2,17 +2,16 @@ package com.fyp.moviecommunity.controller;
 
 import com.fyp.moviecommunity.service.CommentService;
 import com.fyp.moviecommunity.service.ForYouService;
+import com.fyp.moviecommunity.service.ForYouService.FeedSlot;
 import java.util.List;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 
-/**
- * The diversity-weighted feed. See ForYouService for the algorithm itself.
- * This controller adds the top-comment previews on top of the slot list.
- */
 @Controller
 public class ForYouController {
+
+    private static final int DEFAULT_FEED_SIZE = 20;
 
     private final ForYouService forYou;
     private final CommentService commentService;
@@ -24,11 +23,12 @@ public class ForYouController {
 
     @GetMapping("/for-you")
     public String forYou(Model model) {
-        List<ForYouService.FeedSlot> slots = forYou.buildFeed(20);
+        // build the diversity weighted feed
+        List<FeedSlot> slots = forYou.buildFeed(DEFAULT_FEED_SIZE);
 
-        // Same top-comment preview map shape as the plain feed -- template
-        // looks up by post id.
+        // ids needed for the comment previews
         List<Long> postIds = slots.stream().map(s -> s.post().getId()).toList();
+
         model.addAttribute("slots", slots);
         model.addAttribute("topComments", commentService.topCommentByPost(postIds));
         return "foryou";

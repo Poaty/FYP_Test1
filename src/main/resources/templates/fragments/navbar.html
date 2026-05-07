@@ -8,7 +8,7 @@
 -->
 <nav th:fragment="navbar" class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container">
-        <a class="navbar-brand fw-bold" th:href="@{/}">Movie Community</a>
+        <a class="navbar-brand fw-bold" th:href="@{/}">ReelRooms</a>
         <div class="d-flex align-items-center gap-2">
 
             <!-- Authenticated -->
@@ -16,6 +16,8 @@
                class="btn btn-outline-light btn-sm">Feed</a>
             <a sec:authorize="isAuthenticated()" th:href="@{/for-you}"
                class="btn btn-outline-light btn-sm">For You</a>
+            <a sec:authorize="isAuthenticated()" th:href="@{/popular}"
+               class="btn btn-outline-light btn-sm">Popular</a>
             <a sec:authorize="isAuthenticated()" th:href="@{/events}"
                class="btn btn-outline-light btn-sm">Watch parties</a>
             <a sec:authorize="isAuthenticated()" th:href="@{/posts/new}"

@@ -18,19 +18,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 /**
- * Seeds demo data on startup. Split into two independent phases:
+ * Creates demo users, movies, posts, and comments when demo data is enabled.
+ * Idempotent: each phase only runs against an empty database.
  *
- *   Core  -- 5 users, 10 movies, 16 posts, 20 comments.
- *             Idempotent: skipped if user "alice" already exists.
- *   Extra -- +5 movies, +15 posts, +30 comments (heavier engagement skew,
- *             so the popular-threshold kicks in meaningfully).
- *             Idempotent: skipped if the Matrix movie (tt0133093) is already cached.
- *
- * Two phases rather than one so you can re-run the app after the first seed
- * and still pick up the second round without having to truncate tables.
- *
- * Controlled by `app.demo-data.enabled` -- flip to false to skip entirely.
- * All seeded users share password "demo1234".
+ * Controlled by app.demo-data.enabled. All seeded users share password "demo1234".
  */
 @Component
 public class DemoDataSeeder implements CommandLineRunner {
@@ -150,7 +141,7 @@ public class DemoDataSeeder implements CommandLineRunner {
         savePost(bob, INCEPTION,
                 "Limbo sequence is the closest cinema has got to a recurring dream.");
 
-        // Niche films: one post each, stay in long tail
+        // Niche films: one post each, kept in the long tail.
         savePost(carla, ETERNAL_SUN,
                 "Nobody I know has seen this and it breaks my heart every time. " +
                 "The beach-house sequence. Please watch it.");
@@ -164,7 +155,7 @@ public class DemoDataSeeder implements CommandLineRunner {
                 "Feels like a film made by someone who actually had things to say. " +
                 "Swings hard, misses sometimes, I respect it more than anything polished.");
 
-        // Comments -- heavy on a handful of posts, zero on niche
+        // Comments concentrated on a handful of posts; niche films left at zero.
         saveComment(p1, bob,   "Agreed on Nolan earning the runtime. Some docs say the science is tighter than people give it credit for.");
         saveComment(p1, carla, "The docking scene uses real footage of Saturn from Cassini for some shots -- blew my mind when I learned that.");
         saveComment(p1, dave,  "Runtime is exactly the problem for me. Not every film needs to be 3 hours.");
@@ -196,30 +187,26 @@ public class DemoDataSeeder implements CommandLineRunner {
     // ========================================================================
     // Phase 2 -- Extra seed
     //
-    // Adds new movies + richer engagement. Peak comment count after phase 2
-    // reaches 10+, so the popular-threshold (20% of peak) becomes ~2, which
-    // is a proper threshold rather than the degenerate "anything with 1+ comment".
+    // Pushes peak comment count past 10 so the popular threshold (20% of peak)
+    // resolves to ~2 rather than degenerating to 1.
     // ========================================================================
     private void seedExtra() {
-        log.info("Phase 2: seeding extra demo data (more movies, heavier engagement)...");
+        log.info("Phase 2: seeding extra demo data...");
 
-        // Pull user references -- users were already persisted in phase 1
-        // (or in a previous startup). Loading by username works either way.
+        // Phase 1 users may have been persisted in a previous run.
         User alice = users.findByUsername("alice").orElseThrow();
         User bob   = users.findByUsername("bob").orElseThrow();
         User carla = users.findByUsername("carla").orElseThrow();
         User dave  = users.findByUsername("dave").orElseThrow();
         User eve   = users.findByUsername("eve").orElseThrow();
 
-        // New movies -- mix of mainstream sci-fi (Matrix), foreign-language (Parasite),
-        // cult comedy (Groundhog), horror (Shining), thriller (Seven).
-        // Adds genre diversity so the Shannon-entropy metric has something to measure.
+        // Genre mix (sci-fi, foreign-language, comedy, horror, thriller) widens
+        // the input pool for the Shannon-entropy metric.
         for (String id : List.of(MATRIX, PARASITE, GROUNDHOG, SHINING, SEVEN)) {
             movieService.findOrFetch(id);
         }
 
-        // Bump comment counts on existing popular posts so the peak rises.
-        // These reference posts created in phase 1 -- load by user + movie.
+        // Add comments to existing posts so peak comment count rises.
         Post p1Interstellar = firstPost(alice, INTERSTELLAR);
         if (p1Interstellar != null) {
             saveComment(p1Interstellar, carla, "Re-reading this thread 3 weeks later and still finding new takes I agree with.");
@@ -249,7 +236,7 @@ public class DemoDataSeeder implements CommandLineRunner {
             saveComment(p10Inception, alice, "Tight is the word. Every scene earns its place.");
         }
 
-        // New posts on the new movies -- engagement varies widely.
+        // New posts on the new movies.
         Post matrixAlice = savePost(alice, MATRIX,
                 "Holds up in a way I really wasn't expecting on a 2025 rewatch. " +
                 "The bullet-time has been so memed that it's easy to forget how genuinely innovative it was.");
@@ -287,7 +274,7 @@ public class DemoDataSeeder implements CommandLineRunner {
                 "Rewatched and Freeman's performance is so much quieter than I remembered. He's the real centre of the film.");
 
         // Extra comments concentrated on matrixAlice, parasiteCarla, sevenEve
-        // to push the peak comment count up and validate the threshold logic.
+        // to lift peak comment count and exercise the threshold logic.
         saveComment(matrixAlice, bob,   "Bullet-time still doesn't look dated and that's genuinely miraculous.");
         saveComment(matrixAlice, carla, "The way the Wachowskis layer cyberpunk, kung-fu, and gnostic theology into a single film... we don't see this kind of synthesis anymore.");
         saveComment(matrixAlice, dave,  "Fine, the action IS good. I'll give you that.");

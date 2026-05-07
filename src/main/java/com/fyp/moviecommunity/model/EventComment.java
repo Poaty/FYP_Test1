@@ -15,11 +15,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * A comment on an event. Same shape as Comment but separate so the FK to events
- * is straightforward instead of polymorphic. Slight duplication; massive
- * simplification.
- */
 @Entity
 @Table(name = "event_comments")
 @Getter
@@ -32,6 +27,7 @@ public class EventComment {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // separate from post comments because it links straight to an event
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "event_id", nullable = false)
     private Event event;

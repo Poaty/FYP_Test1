@@ -71,3 +71,14 @@ notes.local.md
 # --- Claude session files (keep memory, ignore session artefacts) ---
 .claude/projects/*/sessions/
 .claude/settings.local.json
+# local ai/tooling folders
+.claude/
+
+# temporary code review/export files
+combined_java_files.txt
+java_file_getter.py
+
+# local helper files
+.claude/
+combined_java_files.txt
+java_file_getter.py

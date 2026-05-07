@@ -15,13 +15,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * A scheduled watch party: pick a film, pick a time, people RSVP, people chat.
- *
- * Not real-time -- attendees watch on their own devices and the comment thread
- * fills up before/during/after. Keeps the implementation grounded in the same
- * patterns we already have for posts + comments, no WebSocket layer needed.
- */
 @Entity
 @Table(name = "events")
 @Getter
@@ -34,10 +27,12 @@ public class Event {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // user who made the watch party
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "host_user_id", nullable = false)
     private User host;
 
+    // film picked for the event
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "imdb_id", nullable = false)
     private Movie movie;
@@ -48,6 +43,7 @@ public class Event {
     @Column(columnDefinition = "text")
     private String description;
 
+    // saved after the controller applies uk time
     @Column(name = "scheduled_for", nullable = false)
     private OffsetDateTime scheduledFor;
 

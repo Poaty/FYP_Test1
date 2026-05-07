@@ -15,16 +15,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * A comment on a Post. Supports one-level threading via {@code parent}.
- *
- * Top-level comment: parent == null. Reply: parent != null. Replies always
- * belong to a top-level comment -- replies-to-replies are rejected at the
- * controller level (we don't want Reddit-style infinite nesting).
- *
- * Replies still carry post_id so a single "all comments for a post" query
- * works regardless of nesting, and the count includes both levels.
- */
 @Entity
 @Table(name = "comments")
 @Getter
@@ -37,6 +27,7 @@ public class Comment {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // post this comment belongs to
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "post_id", nullable = false)
     private Post post;
@@ -45,7 +36,7 @@ public class Comment {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    /** Null for top-level comments; set on replies. */
+    // null means this is a top level comment
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_comment_id")
     private Comment parent;

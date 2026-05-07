@@ -8,16 +8,12 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Form-backing object for signup. Kept separate from {@link com.fyp.moviecommunity.model.User}
- * so that validation rules, field order, and raw password field don't leak
- * onto the entity (the User entity never sees or stores a raw password).
- */
 @Getter
 @Setter
 @NoArgsConstructor
 public class SignupForm {
 
+    // shown as the user's public name
     @NotBlank(message = "Choose a username")
     @Size(min = 3, max = 30, message = "Username must be 3-30 characters")
     @Pattern(regexp = "^[a-zA-Z0-9_]+$", message = "Letters, numbers, and underscores only")

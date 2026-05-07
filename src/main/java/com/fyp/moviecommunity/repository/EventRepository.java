@@ -10,11 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 
 public interface EventRepository extends JpaRepository<Event, Long> {
 
-    /**
-     * Upcoming events (scheduledFor in the future), soonest first.
-     * JOIN FETCH on host + movie so the list page can render without
-     * lazy-loading exploding (open-in-view is off, same drill as posts).
-     */
+    // upcoming events for the list page
     @Query("""
         select e from Event e
         join fetch e.host
@@ -24,9 +20,7 @@ public interface EventRepository extends JpaRepository<Event, Long> {
         """)
     List<Event> findUpcoming(OffsetDateTime now);
 
-    /**
-     * Single event with host + movie eagerly loaded -- for the show page.
-     */
+    // event with host and movie loaded
     @Query("""
         select e from Event e
         join fetch e.host
@@ -35,11 +29,7 @@ public interface EventRepository extends JpaRepository<Event, Long> {
         """)
     Optional<Event> findByIdWithHost(Long id);
 
-    /**
-     * Past events (already happened), most recent first.
-     * Pageable so we can cap the list -- old comment threads still accessible
-     * via /events/{id} directly even if we don't list every past event forever.
-     */
+    // older events shown under the upcoming list
     @Query("""
         select e from Event e
         join fetch e.host

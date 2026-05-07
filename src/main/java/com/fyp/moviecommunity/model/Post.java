@@ -15,13 +15,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * A user's opinion/review on a specific movie.
- *
- * <p>Relationships are lazy-loaded -- we don't want a feed query
- * silently pulling the whole user and movie for every row. Controllers
- * will use JOIN FETCH or explicit queries when they need the children.
- */
 @Entity
 @Table(name = "posts")
 @Getter
@@ -34,10 +27,12 @@ public class Post {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // author of the post
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    // movie being discussed
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "imdb_id", nullable = false)
     private Movie movie;

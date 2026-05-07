@@ -17,51 +17,53 @@ import org.springframework.web.bind.annotation.RequestParam;
 @Controller
 public class HomeController {
 
+    private static final int FEED_PAGE_SIZE = 20;
+
     private final PostRepository posts;
     private final CommentRepository comments;
     private final CommentService commentService;
 
-    public HomeController(PostRepository posts, CommentRepository comments,
+    public HomeController(PostRepository posts,
+                          CommentRepository comments,
                           CommentService commentService) {
         this.posts = posts;
         this.comments = comments;
         this.commentService = commentService;
     }
 
-    /** Send anyone hitting root straight to the feed. Spring Security bounces
-     *  anonymous users to /login. */
     @GetMapping("/")
     public String root() {
+        // root just sends users to the feed
         return "redirect:/feed";
     }
 
-    /**
-     * Plain chronological feed, paginated. 20 posts per page, newest first.
-     * User + movie eagerly loaded in one SQL (JOIN FETCH); comment counts
-     * come from a second batched GROUP BY. Two DB round-trips total per
-     * page render, regardless of how many posts are on screen.
-     */
     @GetMapping("/feed")
     public String feed(@RequestParam(defaultValue = "0") int page, Model model) {
-        int pageSize = 20;
-        Page<Post> feedPage = posts.findPageWithAuthors(
-                PageRequest.of(Math.max(0, page), pageSize));
+        // stop negative page numbers
+        int safePage = Math.max(0, page);
 
-        // Batch-fetch comment counts (top-level + replies) for every post.
-        List<Long> ids = feedPage.getContent().stream().map(Post::getId).toList();
+        Page<Post> feedPage = posts.findPageWithAuthors(
+                PageRequest.of(safePage, FEED_PAGE_SIZE));
+        List<Post> rows = feedPage.getContent();
+
+        // ids for the posts shown on this page
+        List<Long> ids = rows.stream().map(Post::getId).toList();
+
+        // comment totals for each feed card
         Map<Long, Long> counts = new HashMap<>();
         if (!ids.isEmpty()) {
             for (Object[] row : comments.countByPostIdIn(ids)) {
-                counts.put((Long) row[0], ((Number) row[1]).longValue());
+                Long postId = (Long) row[0];
+                long total = ((Number) row[1]).longValue();
+                counts.put(postId, total);
             }
         }
 
-        // Top-comment preview per post (the top-level comment with the most
-        // replies). Two batched queries inside the service.
+        // preview comment shown under each post
         Map<Long, CommentService.TopCommentPreview> topComments =
                 commentService.topCommentByPost(ids);
 
-        model.addAttribute("posts", feedPage.getContent());
+        model.addAttribute("posts", rows);
         model.addAttribute("commentCounts", counts);
         model.addAttribute("topComments", topComments);
         model.addAttribute("currentPage", feedPage.getNumber());

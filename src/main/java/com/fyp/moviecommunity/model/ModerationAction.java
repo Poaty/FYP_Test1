@@ -15,15 +15,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * One row per admin moderation action. Survives deletion of the target
- * (target_id is just a number, not an FK -- the row that was deleted
- * is gone, and that's fine for an audit log).
- *
- * Survives admin account deletion too: the admin FK is ON DELETE SET NULL,
- * so the action is preserved with admin_user_id = null and a username we
- * can't recover. Acceptable for an MVP audit log.
- */
 @Entity
 @Table(name = "moderation_actions")
 @Getter
@@ -36,7 +27,7 @@ public class ModerationAction {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** Nullable -- if the admin account is later deleted, this becomes null. */
+    // can be null if the admin account is removed
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "admin_user_id")
     private User admin;
@@ -47,6 +38,7 @@ public class ModerationAction {
     @Column(name = "target_type", nullable = false)
     private String targetType;
 
+    // plain id because the deleted row may not exist anymore
     @Column(name = "target_id", nullable = false)
     private Long targetId;
 

@@ -3,6 +3,7 @@ package com.fyp.moviecommunity.controller;
 import com.fyp.moviecommunity.service.PerformanceMetrics;
 import com.fyp.moviecommunity.service.PerformanceMetrics.RouteSnapshot;
 import com.fyp.moviecommunity.service.PerformanceMetrics.Snapshot;
+import java.util.Map;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -10,12 +11,6 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 
-/**
- * Admin-only performance dashboard. Live counters since app startup.
- *
- *   GET /admin/perf       -- HTML dashboard
- *   GET /admin/perf.csv   -- raw numbers, paste into the report
- */
 @Controller
 @RequestMapping("/admin")
 public class PerformanceController {
@@ -28,47 +23,58 @@ public class PerformanceController {
 
     @GetMapping("/perf")
     public String perf(Model model) {
+        // current runtime snapshot
         model.addAttribute("snapshot", metrics.snapshot());
         return "admin/perf";
     }
 
     @GetMapping(value = "/perf.csv", produces = "text/csv")
     public ResponseEntity<String> perfCsv() {
-        Snapshot s = metrics.snapshot();
-        StringBuilder sb = new StringBuilder();
+        Snapshot snapshot = metrics.snapshot();
+        StringBuilder csv = new StringBuilder();
 
-        sb.append("# OMDb counters\n");
-        sb.append("metric,value\n");
-        sb.append("omdb_calls,").append(s.omdbCalls()).append('\n');
-        sb.append("omdb_mean_ms,").append(fmt(s.omdbMeanMs())).append('\n');
-        sb.append("cache_hits,").append(s.cacheHits()).append('\n');
-        sb.append("cache_misses,").append(s.cacheMisses()).append('\n');
-        sb.append("cache_lookups,").append(s.cacheLookups()).append('\n');
-        sb.append("cache_hit_rate_pct,").append(fmt(s.cacheHitRatePct())).append('\n');
-        sb.append('\n');
-
-        sb.append("# Per-route timing (rolling window of last 200 requests)\n");
-        sb.append("route,total_count,sample_count,mean_ms,p50_ms,p95_ms,min_ms,max_ms\n");
-        for (var e : s.routes().entrySet()) {
-            RouteSnapshot r = e.getValue();
-            sb.append('"').append(e.getKey()).append('"').append(',')
-                    .append(r.requestCount()).append(',')
-                    .append(r.sampleCount()).append(',')
-                    .append(fmt(r.meanMs())).append(',')
-                    .append(r.p50Ms()).append(',')
-                    .append(r.p95Ms()).append(',')
-                    .append(r.minMs()).append(',')
-                    .append(r.maxMs()).append('\n');
-        }
+        // csv export for report evidence
+        writeOmdbCounters(csv, snapshot);
+        csv.append('\n');
+        writeRouteTimings(csv, snapshot.routes());
 
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("text/csv"))
                 .header("Content-Disposition", "attachment; filename=\"perf.csv\"")
-                .body(sb.toString());
+                .body(csv.toString());
     }
 
-    private static String fmt(double v) {
-        if (v == Math.floor(v) && !Double.isInfinite(v)) return String.valueOf((long) v);
-        return String.format("%.2f", v);
+    private static void writeOmdbCounters(StringBuilder csv, Snapshot snapshot) {
+        csv.append("# OMDb counters\n");
+        csv.append("metric,value\n");
+        csv.append("omdb_calls,").append(snapshot.omdbCalls()).append('\n');
+        csv.append("omdb_mean_ms,").append(formatNumber(snapshot.omdbMeanMs())).append('\n');
+        csv.append("cache_hits,").append(snapshot.cacheHits()).append('\n');
+        csv.append("cache_misses,").append(snapshot.cacheMisses()).append('\n');
+        csv.append("cache_lookups,").append(snapshot.cacheLookups()).append('\n');
+        csv.append("cache_hit_rate_pct,").append(formatNumber(snapshot.cacheHitRatePct())).append('\n');
+    }
+
+    private static void writeRouteTimings(StringBuilder csv, Map<String, RouteSnapshot> routes) {
+        csv.append("# Per-route timing (rolling window of last 200 requests)\n");
+        csv.append("route,total_count,sample_count,mean_ms,p50_ms,p95_ms,min_ms,max_ms\n");
+
+        for (Map.Entry<String, RouteSnapshot> entry : routes.entrySet()) {
+            RouteSnapshot route = entry.getValue();
+            csv.append('"').append(entry.getKey()).append('"').append(',')
+                    .append(route.requestCount()).append(',')
+                    .append(route.sampleCount()).append(',')
+                    .append(formatNumber(route.meanMs())).append(',')
+                    .append(route.p50Ms()).append(',')
+                    .append(route.p95Ms()).append(',')
+                    .append(route.minMs()).append(',')
+                    .append(route.maxMs()).append('\n');
+        }
+    }
+
+    private static String formatNumber(double value) {
+        if (Double.isInfinite(value) || Double.isNaN(value)) return String.valueOf(value);
+        if (value == Math.floor(value)) return String.valueOf((long) value);
+        return String.format("%.2f", value);
     }
 }

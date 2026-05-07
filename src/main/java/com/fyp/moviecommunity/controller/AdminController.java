@@ -5,7 +5,6 @@ import com.fyp.moviecommunity.model.Event;
 import com.fyp.moviecommunity.model.EventComment;
 import com.fyp.moviecommunity.model.ModerationAction;
 import com.fyp.moviecommunity.model.Post;
-import com.fyp.moviecommunity.model.User;
 import com.fyp.moviecommunity.repository.CommentRepository;
 import com.fyp.moviecommunity.repository.EventCommentRepository;
 import com.fyp.moviecommunity.repository.EventRepository;
@@ -26,46 +25,35 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
-/**
- * Admin moderation endpoints. Hard-deletes content (cascades happen at the DB
- * level via the schema's ON DELETE CASCADE on every FK).
- *
- *   POST /admin/posts/{id}/delete            -- delete a post + its comments
- *   POST /admin/comments/{id}/delete         -- delete a comment + its replies
- *   POST /admin/events/{id}/delete           -- delete an event + RSVPs + thread
- *   POST /admin/event-comments/{id}/delete   -- delete one event comment
- *
- * All endpoints require ROLE_ADMIN (enforced in SecurityConfig). No in-app
- * way to grant admin yet -- run a SQL update on the users.is_admin column.
- *
- * POST not DELETE because HTML forms don't natively support DELETE.
- */
+// Admin moderation endpoints. Access is handled in SecurityConfig.
+// Deletes are posted from normal HTML forms, and an audit row is kept
+// before the target content is removed.
 @Controller
 @RequestMapping("/admin")
 public class AdminController {
 
     private static final Logger log = LoggerFactory.getLogger(AdminController.class);
 
-    private static final int SUMMARY_LEN = 200;
+    private static final int PREVIEW_CHARS = 200;
 
     private final PostRepository posts;
     private final CommentRepository comments;
     private final EventRepository events;
     private final EventCommentRepository eventComments;
-    private final ModerationActionRepository moderationLog;
+    private final ModerationActionRepository modLog;
     private final UserRepository users;
 
     public AdminController(PostRepository posts,
                            CommentRepository comments,
                            EventRepository events,
                            EventCommentRepository eventComments,
-                           ModerationActionRepository moderationLog,
+                           ModerationActionRepository modLog,
                            UserRepository users) {
         this.posts = posts;
         this.comments = comments;
         this.events = events;
         this.eventComments = eventComments;
-        this.moderationLog = moderationLog;
+        this.modLog = modLog;
         this.users = users;
     }
 
@@ -73,11 +61,17 @@ public class AdminController {
     public String deletePost(@PathVariable Long id,
                              @RequestParam String reason,
                              @AuthenticationPrincipal AppUserDetails me) {
-        Optional<Post> p = posts.findById(id);
-        if (p.isEmpty() || !validReason(reason)) return "redirect:/feed";
-        record(me, "DELETE_POST", "POST", id, abbreviate(p.get().getContent()), reason);
+        String r = reason == null ? "" : reason.trim();
+        if (r.length() < 3 || r.length() > 500) {
+            return "redirect:/feed";
+        }
+
+        Post p = posts.findById(id).orElse(null);
+        if (p == null) return "redirect:/feed";
+
+        writeAudit(me, "DELETE_POST", "POST", id, preview(p.getContent()), r);
         posts.deleteById(id);
-        log.info("Admin {} deleted post id={} -- reason: {}", me.getUsername(), id, reason);
+        log.info("[admin:{}] removed post #{} -- {}", me.getUsername(), id, r);
         return "redirect:/feed";
     }
 
@@ -85,13 +79,19 @@ public class AdminController {
     public String deleteComment(@PathVariable Long id,
                                 @RequestParam String reason,
                                 @AuthenticationPrincipal AppUserDetails me) {
-        Optional<Comment> c = comments.findById(id);
-        if (c.isEmpty() || !validReason(reason)) return "redirect:/feed";
-        Long postId = c.get().getPost().getId();
-        record(me, "DELETE_COMMENT", "COMMENT", id, abbreviate(c.get().getContent()), reason);
+        Optional<Comment> maybe = comments.findById(id);
+        if (maybe.isEmpty()) return "redirect:/feed";
+        Comment c = maybe.get();
+
+        Long postId = c.getPost().getId();
+
+        if (!reasonOk(reason)) return "redirect:/posts/" + postId;
+        String r = reason.trim();
+
+        writeAudit(me, "DELETE_COMMENT", "COMMENT", id, preview(c.getContent()), r);
         comments.deleteById(id);
-        log.info("Admin {} deleted comment id={} (post {}) -- reason: {}",
-                me.getUsername(), id, postId, reason);
+        log.info("[admin:{}] removed comment #{} on post {} -- {}",
+                me.getUsername(), id, postId, r);
         return "redirect:/posts/" + postId;
     }
 
@@ -99,11 +99,17 @@ public class AdminController {
     public String deleteEvent(@PathVariable Long id,
                               @RequestParam String reason,
                               @AuthenticationPrincipal AppUserDetails me) {
-        Optional<Event> e = events.findById(id);
-        if (e.isEmpty() || !validReason(reason)) return "redirect:/events";
-        record(me, "DELETE_EVENT", "EVENT", id, abbreviate(e.get().getTitle()), reason);
+        if (!reasonOk(reason)) return "redirect:/events";
+
+        Optional<Event> evtOpt = events.findById(id);
+        if (evtOpt.isEmpty()) return "redirect:/events";
+        Event evt = evtOpt.get();
+
+        String r = reason.trim();
+        writeAudit(me, "DELETE_EVENT", "EVENT", id, preview(evt.getTitle()), r);
         events.deleteById(id);
-        log.info("Admin {} deleted event id={} -- reason: {}", me.getUsername(), id, reason);
+        log.info("[admin:{}] removed event #{} \"{}\" -- {}",
+                me.getUsername(), id, evt.getTitle(), r);
         return "redirect:/events";
     }
 
@@ -111,46 +117,47 @@ public class AdminController {
     public String deleteEventComment(@PathVariable Long id,
                                      @RequestParam String reason,
                                      @AuthenticationPrincipal AppUserDetails me) {
-        Optional<EventComment> ec = eventComments.findById(id);
-        if (ec.isEmpty() || !validReason(reason)) return "redirect:/events";
-        Long eventId = ec.get().getEvent().getId();
-        record(me, "DELETE_EVENT_COMMENT", "EVENT_COMMENT", id, abbreviate(ec.get().getContent()), reason);
+        Optional<EventComment> opt = eventComments.findById(id);
+        if (opt.isEmpty() || !reasonOk(reason)) return "redirect:/events";
+
+        EventComment ec = opt.get();
+        Long eventId = ec.getEvent().getId();
+        String r = reason.trim();
+
+        writeAudit(me, "DELETE_EVENT_COMMENT", "EVENT_COMMENT", id, preview(ec.getContent()), r);
         eventComments.deleteById(id);
-        log.info("Admin {} deleted event comment id={} (event {}) -- reason: {}",
-                me.getUsername(), id, eventId, reason);
+        log.info("[admin:{}] removed event-comment #{} (event {}) -- {}",
+                me.getUsername(), id, eventId, r);
         return "redirect:/events/" + eventId;
     }
 
-    /** Admin audit log -- recent actions, newest first. */
     @GetMapping("/log")
     public String log(Model model) {
-        model.addAttribute("actions", moderationLog.findRecent(PageRequest.of(0, 100)));
+        model.addAttribute("actions", modLog.findRecent(PageRequest.of(0, 100)));
         return "admin/log";
     }
 
-    // ------------------------------------------------------------------------
-
-    private boolean validReason(String reason) {
-        return reason != null && reason.trim().length() >= 3 && reason.trim().length() <= 500;
+    private boolean reasonOk(String reason) {
+        if (reason == null) return false;
+        int n = reason.trim().length();
+        return n >= 3 && n <= 500;
     }
 
-    private String abbreviate(String s) {
+    private String preview(String s) {
         if (s == null) return null;
-        return s.length() <= SUMMARY_LEN ? s : s.substring(0, SUMMARY_LEN - 3) + "...";
+        if (s.length() <= PREVIEW_CHARS) return s;
+        return s.substring(0, PREVIEW_CHARS - 3) + "...";
     }
 
-    private void record(AppUserDetails me, String actionType, String targetType,
-                        Long targetId, String targetSummary, String reason) {
-        ModerationAction a = new ModerationAction();
-        // getReferenceById gives us a proxy with just the id -- no extra SELECT
-        // and the audit row survives even if the admin's account is later deleted.
-        User admin = users.getReferenceById(me.getId());
-        a.setAdmin(admin);
-        a.setActionType(actionType);
-        a.setTargetType(targetType);
-        a.setTargetId(targetId);
-        a.setTargetSummary(targetSummary);
-        a.setReason(reason.trim());
-        moderationLog.save(a);
+    private void writeAudit(AppUserDetails me, String action, String targetType,
+                            Long targetId, String preview, String reason) {
+        ModerationAction row = new ModerationAction();
+        row.setAdmin(users.getReferenceById(me.getId()));
+        row.setActionType(action);
+        row.setTargetType(targetType);
+        row.setTargetId(targetId);
+        row.setTargetSummary(preview);
+        row.setReason(reason);
+        modLog.save(row);
     }
 }

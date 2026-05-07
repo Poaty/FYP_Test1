@@ -16,15 +16,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * One row = "this user has RSVPed to this event".
- *
- * Could have used a composite primary key on (event_id, user_id) but a surrogate
- * id + unique constraint is simpler in JPA. Same effect, less ceremony.
- */
 @Entity
 @Table(name = "event_attendances",
-       uniqueConstraints = @UniqueConstraint(columnNames = {"event_id", "user_id"}))
+        uniqueConstraints = @UniqueConstraint(columnNames = {"event_id", "user_id"}))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -35,6 +29,7 @@ public class EventAttendance {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // one row per user attending an event
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "event_id", nullable = false)
     private Event event;

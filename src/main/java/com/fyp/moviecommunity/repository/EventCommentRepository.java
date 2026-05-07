@@ -8,10 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 
 public interface EventCommentRepository extends JpaRepository<EventComment, Long> {
 
-    /**
-     * Comments on an event, oldest first. Author joined in so the show
-     * page renders without lazy-loading.
-     */
+    // comments shown on the event page
     @Query("""
         select c from EventComment c
         join fetch c.user

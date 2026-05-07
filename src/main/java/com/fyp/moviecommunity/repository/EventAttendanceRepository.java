@@ -10,16 +10,13 @@ import org.springframework.data.jpa.repository.Query;
 
 public interface EventAttendanceRepository extends JpaRepository<EventAttendance, Long> {
 
-    /** Has this user RSVPed to this event already? */
+    // existing rsvp row
     Optional<EventAttendance> findByEventAndUser(Event event, User user);
 
-    /** How many people are going to this event? */
+    // attendee count for event cards
     long countByEvent(Event event);
 
-    /**
-     * Attendees of a single event, with the user joined in so the show
-     * page can list usernames without lazy-loading.
-     */
+    // attendees shown on the event page
     @Query("""
         select a from EventAttendance a
         join fetch a.user

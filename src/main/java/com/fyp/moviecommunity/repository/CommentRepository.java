@@ -9,10 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 
 public interface CommentRepository extends JpaRepository<Comment, Long> {
 
-    /**
-     * Top-level comments on a post (no replies), oldest first.
-     * Author joined in so the show page renders without lazy-loading.
-     */
+    // top level comments on a post
     @Query("""
         select c from Comment c
         join fetch c.user
@@ -21,10 +18,7 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
         """)
     List<Comment> findTopLevelByPost(Post post);
 
-    /**
-     * Replies to any of the given top-level comments. Used to populate the
-     * show page in a single query rather than N queries (one per top-level).
-     */
+    // replies for the visible top level comments
     @Query("""
         select c from Comment c
         join fetch c.user
@@ -33,8 +27,7 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
         """)
     List<Comment> findRepliesByParentIds(Collection<Long> parentIds);
 
-    /** Total comment count per post -- includes top-level AND replies, since
-     *  every comment row has post_id set regardless of nesting. */
+    // total comments per post including replies
     @Query("""
         select c.post.id, count(c)
         from Comment c
@@ -43,10 +36,7 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
         """)
     List<Object[]> countByPostIdIn(Collection<Long> postIds);
 
-    /**
-     * Top-level comments only, for a batch of posts. Used by the feed-card
-     * top-comment preview computation.
-     */
+    // top level comments across feed cards
     @Query("""
         select c from Comment c
         join fetch c.user
@@ -54,10 +44,7 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
         """)
     List<Comment> findTopLevelByPostIds(Collection<Long> postIds);
 
-    /**
-     * Reply counts per parent comment id. Used together with findTopLevelByPostIds
-     * to determine which top-level comment has the most replies for the preview.
-     */
+    // reply counts for picking the preview comment
     @Query("""
         select c.parent.id, count(c)
         from Comment c

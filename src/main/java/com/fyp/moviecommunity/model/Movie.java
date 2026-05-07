@@ -10,14 +10,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * A movie cached from the OMDb API.
- *
- * <p>The primary key is OMDb's {@code imdb_id} (e.g. "tt3896198"),
- * so we avoid duplicating the same movie across posts. Whenever a
- * user writes a post about a movie we haven't seen, we fetch from
- * OMDb and upsert into this table.
- */
 @Entity
 @Table(name = "movies")
 @Getter
@@ -26,6 +18,7 @@ import lombok.Setter;
 @AllArgsConstructor
 public class Movie {
 
+    // omdb id is used as the primary key
     @Id
     @Column(name = "imdb_id")
     private String imdbId;
@@ -45,6 +38,7 @@ public class Movie {
 
     private String director;
 
+    // when this movie was cached locally
     @Column(name = "cached_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime cachedAt;
 }

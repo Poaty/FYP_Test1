@@ -11,19 +11,16 @@ import org.springframework.data.jpa.repository.Query;
 
 public interface PostRepository extends JpaRepository<Post, Long> {
 
-    /** Chronological feed, newest first. For the plain /feed page. */
+    // normal chronological feed
     Page<Post> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
-    /** All posts by a given user, newest first (for profile pages). */
+    // posts by one user
     List<Post> findByUserOrderByCreatedAtDesc(User user);
 
-    /** All posts about a specific movie, newest first. */
+    // posts for a movie page or lookup
     List<Post> findByMovieImdbIdOrderByCreatedAtDesc(String imdbId);
 
-    /**
-     * Feed eagerly loaded -- joins user + movie so templates don't fire
-     * lazy-load queries per row. Used on hot paths like the For You pool.
-     */
+    // recent posts with user and movie ready for the feed
     @Query("""
         select p from Post p
         join fetch p.user
@@ -32,25 +29,17 @@ public interface PostRepository extends JpaRepository<Post, Long> {
         """)
     List<Post> findRecentWithAuthors(Pageable pageable);
 
-    /**
-     * Same as above but returns a Page (with total count) so /feed can
-     * render pagination controls. Explicit countQuery avoids Hibernate
-     * generating a bad one due to the JOIN FETCH.
-     */
+    // paged version used by /feed
     @Query(value = """
             select p from Post p
             join fetch p.user
             join fetch p.movie
             order by p.createdAt desc
             """,
-           countQuery = "select count(p) from Post p")
+            countQuery = "select count(p) from Post p")
     Page<Post> findPageWithAuthors(Pageable pageable);
 
-    /**
-     * Single post with user + movie already loaded. Used by the /posts/{id}
-     * show page -- without this, Thymeleaf tries to lazy-load movie/user
-     * after the Hibernate session is closed (we have open-in-view off).
-     */
+    // single post for the show page
     @Query("""
         select p from Post p
         join fetch p.user
@@ -59,10 +48,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
         """)
     Optional<Post> findByIdWithAuthor(Long id);
 
-    /**
-     * Batch count for the For You algorithm: how many posts exist about
-     * each of these movies. Returns (imdbId, count) rows.
-     */
+    // post counts per movie for scoring
     @Query("""
         select p.movie.imdbId, count(p)
         from Post p

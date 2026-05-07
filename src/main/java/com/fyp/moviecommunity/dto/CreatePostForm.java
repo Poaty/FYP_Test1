@@ -6,17 +6,12 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * What the user submits when they hit "Post it" on the write page.
- *
- * imdbId is carried through as a hidden field from the previous page
- * (they picked the movie there; we don't want them picking it again).
- */
 @Getter
 @Setter
 @NoArgsConstructor
 public class CreatePostForm {
 
+    // movie picked before the write page
     @NotBlank(message = "Something went wrong -- pick a movie again")
     private String imdbId;
 

@@ -8,7 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 
 public interface ModerationActionRepository extends JpaRepository<ModerationAction, Long> {
 
-    /** Recent admin actions, newest first, with admin user joined in. */
+    // latest admin actions for the log page
     @Query("""
         select a from ModerationAction a
         left join fetch a.admin

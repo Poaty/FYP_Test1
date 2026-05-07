@@ -11,19 +11,13 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
-/**
- * Admin-only quantitative-evaluation endpoints. Both routes are gated to
- * ROLE_ADMIN by the /admin/** rule in SecurityConfig.
- *
- *   GET /admin/metrics            -- HTML comparison table
- *   GET /admin/metrics.csv        -- raw numbers, paste straight into the report
- *
- * Default feed size = 20 (the For You page default). Override with ?size=N
- * for sensitivity analysis (run at 10, 20, 30 to show the metrics scale).
- */
 @Controller
 @RequestMapping("/admin")
 public class MetricsController {
+
+    private static final String DEFAULT_SIZE = "20";
+    private static final int MIN_SIZE = 1;
+    private static final int MAX_SIZE = 100;
 
     private final MetricsService metrics;
 
@@ -32,33 +26,35 @@ public class MetricsController {
     }
 
     @GetMapping("/metrics")
-    public String metrics(@RequestParam(defaultValue = "20") int size, Model model) {
-        Comparison c = metrics.compareFeeds(Math.max(1, Math.min(size, 100)));
-        model.addAttribute("comparison", c);
+    public String metrics(@RequestParam(defaultValue = DEFAULT_SIZE) int size, Model model) {
+        // compare the normal feed against for you
+        Comparison comparison = metrics.compareFeeds(clampSize(size));
+
+        model.addAttribute("comparison", comparison);
         model.addAttribute("size", size);
-        // Pre-computed deltas for the template (avoids math in Thymeleaf).
-        model.addAttribute("deltas", new Deltas(c));
+        model.addAttribute("deltas", new Deltas(comparison));
         return "admin/metrics";
     }
 
     @GetMapping(value = "/metrics.csv", produces = "text/csv")
-    public ResponseEntity<String> metricsCsv(@RequestParam(defaultValue = "20") int size) {
-        Comparison c = metrics.compareFeeds(Math.max(1, Math.min(size, 100)));
-        FeedMetrics b = c.baseline();
-        FeedMetrics d = c.diverse();
+    public ResponseEntity<String> metricsCsv(@RequestParam(defaultValue = DEFAULT_SIZE) int size) {
+        Comparison comparison = metrics.compareFeeds(clampSize(size));
+        FeedMetrics baseline = comparison.baseline();
+        FeedMetrics forYou = comparison.diverse();
 
+        // csv version used for the report tables
         StringBuilder out = new StringBuilder();
         out.append("metric,baseline,foryou,delta,pct_change\n");
-        row(out, "feed_size", b.feedSize(), d.feedSize());
-        row(out, "pool_size", b.poolSize(), d.poolSize());
-        row(out, "pool_median_comments", b.poolMedianComments(), d.poolMedianComments());
-        row(out, "shannon_entropy_bits", b.shannonEntropy(), d.shannonEntropy());
-        row(out, "shannon_entropy_max_bits", b.shannonMax(), d.shannonMax());
-        row(out, "shannon_normalised", b.shannonNormalised(), d.shannonNormalised());
-        row(out, "unique_authors", b.uniqueAuthors(), d.uniqueAuthors());
-        row(out, "unique_author_ratio", b.uniqueAuthorRatio(), d.uniqueAuthorRatio());
-        row(out, "long_tail_pct", b.longTailPct(), d.longTailPct());
-        row(out, "mean_comments_per_slot", b.meanCommentsPerSlot(), d.meanCommentsPerSlot());
+        appendRow(out, "feed_size", baseline.feedSize(), forYou.feedSize());
+        appendRow(out, "pool_size", baseline.poolSize(), forYou.poolSize());
+        appendRow(out, "pool_median_comments", baseline.poolMedianComments(), forYou.poolMedianComments());
+        appendRow(out, "shannon_entropy_bits", baseline.shannonEntropy(), forYou.shannonEntropy());
+        appendRow(out, "shannon_entropy_max_bits", baseline.shannonMax(), forYou.shannonMax());
+        appendRow(out, "shannon_normalised", baseline.shannonNormalised(), forYou.shannonNormalised());
+        appendRow(out, "unique_authors", baseline.uniqueAuthors(), forYou.uniqueAuthors());
+        appendRow(out, "unique_author_ratio", baseline.uniqueAuthorRatio(), forYou.uniqueAuthorRatio());
+        appendRow(out, "long_tail_pct", baseline.longTailPct(), forYou.longTailPct());
+        appendRow(out, "mean_comments_per_slot", baseline.meanCommentsPerSlot(), forYou.meanCommentsPerSlot());
 
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("text/csv"))
@@ -66,48 +62,50 @@ public class MetricsController {
                 .body(out.toString());
     }
 
-    // ---- CSV helpers ----
+    private static int clampSize(int requested) {
+        // stop silly values from being passed in the url
+        if (requested < MIN_SIZE) return MIN_SIZE;
+        if (requested > MAX_SIZE) return MAX_SIZE;
+        return requested;
+    }
 
-    private static void row(StringBuilder sb, String name, double base, double diverse) {
+    private static void appendRow(StringBuilder sb, String name, double base, double diverse) {
         double delta = diverse - base;
-        double pct = base == 0 ? 0 : (delta / base) * 100.0;
+        double pct = (base == 0) ? 0 : (delta / base) * 100.0;
+
         sb.append(name).append(',')
-                .append(fmt(base)).append(',')
-                .append(fmt(diverse)).append(',')
-                .append(fmt(delta)).append(',')
-                .append(fmt(pct)).append('\n');
+                .append(formatNumber(base)).append(',')
+                .append(formatNumber(diverse)).append(',')
+                .append(formatNumber(delta)).append(',')
+                .append(formatNumber(pct)).append('\n');
     }
 
-    private static String fmt(double v) {
-        // Strip trailing zeros for clean CSV.
-        if (v == Math.floor(v) && !Double.isInfinite(v)) return String.valueOf((long) v);
-        return String.format("%.4f", v);
+    private static String formatNumber(double value) {
+        if (Double.isInfinite(value) || Double.isNaN(value)) return String.valueOf(value);
+        if (value == Math.floor(value)) return String.valueOf((long) value);
+        return String.format("%.4f", value);
     }
 
-    /**
-     * Simple holder of pre-computed deltas + percentage changes so the
-     * template doesn't have to do arithmetic in Thymeleaf expressions.
-     */
-    public record Deltas(double shannonDelta,    double shannonPct,
-                         int    authorsDelta,    double authorsPct,
-                         double longTailDelta,   double longTailPct,
+    public record Deltas(double shannonDelta, double shannonPct,
+                         int authorsDelta, double authorsPct,
+                         double longTailDelta, double longTailPct,
                          double meanCommentsDelta, double meanCommentsPct) {
 
-        public Deltas(Comparison c) {
+        public Deltas(Comparison comparison) {
             this(
-                c.diverse().shannonEntropy() - c.baseline().shannonEntropy(),
-                pct(c.baseline().shannonEntropy(),    c.diverse().shannonEntropy()),
-                c.diverse().uniqueAuthors() - c.baseline().uniqueAuthors(),
-                pct(c.baseline().uniqueAuthors(),     c.diverse().uniqueAuthors()),
-                c.diverse().longTailPct() - c.baseline().longTailPct(),
-                pct(c.baseline().longTailPct(),       c.diverse().longTailPct()),
-                c.diverse().meanCommentsPerSlot() - c.baseline().meanCommentsPerSlot(),
-                pct(c.baseline().meanCommentsPerSlot(), c.diverse().meanCommentsPerSlot())
+                    comparison.diverse().shannonEntropy() - comparison.baseline().shannonEntropy(),
+                    pct(comparison.baseline().shannonEntropy(), comparison.diverse().shannonEntropy()),
+                    comparison.diverse().uniqueAuthors() - comparison.baseline().uniqueAuthors(),
+                    pct(comparison.baseline().uniqueAuthors(), comparison.diverse().uniqueAuthors()),
+                    comparison.diverse().longTailPct() - comparison.baseline().longTailPct(),
+                    pct(comparison.baseline().longTailPct(), comparison.diverse().longTailPct()),
+                    comparison.diverse().meanCommentsPerSlot() - comparison.baseline().meanCommentsPerSlot(),
+                    pct(comparison.baseline().meanCommentsPerSlot(), comparison.diverse().meanCommentsPerSlot())
             );
         }
 
-        private static double pct(double a, double b) {
-            return a == 0 ? 0 : ((b - a) / a) * 100.0;
+        private static double pct(double base, double revised) {
+            return (base == 0) ? 0 : ((revised - base) / base) * 100.0;
         }
     }
 }
