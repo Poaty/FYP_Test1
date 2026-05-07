@@ -15,7 +15,7 @@
         <a th:href="@{/posts/new}" class="btn btn-primary">+ New post</a>
     </div>
 
-    <!-- Empty state -->
+    <!-- no posts yet -->
     <div th:if="${#lists.isEmpty(posts)}" class="card border-0 shadow-sm">
         <div class="card-body text-center py-5">
             <h2 class="h5 mb-2">No posts yet</h2>
@@ -26,17 +26,15 @@
         </div>
     </div>
 
-    <!-- Page counter (top) -->
+    <!-- page number -->
     <p th:if="${totalPages > 1}" class="text-muted small mb-3">
         Page <span th:text="${currentPage + 1}">1</span> of <span th:text="${totalPages}">N</span>
     </p>
 
-    <!-- Post cards. d-flex with a fixed-size poster so cards stay consistent
-         visually whether or not the post has comments. -->
     <div th:each="post : ${posts}" class="card border-0 shadow-sm mb-4">
         <div class="d-flex align-items-start">
-            <!-- Fixed 180x270 poster (standard 2:3 movie poster ratio).
-                 Big enough to read the title; doesn't dominate the card. -->
+
+            <!-- poster column -->
             <div class="flex-shrink-0 me-1">
                 <img th:if="${post.movie.posterUrl != null}" th:src="${post.movie.posterUrl}"
                      alt="poster"
@@ -48,21 +46,23 @@
                      style="width: 180px; height: 270px; object-fit: cover;
                             border-top-left-radius: 0.375rem; border-bottom-left-radius: 0.375rem;">
             </div>
-            <!-- Content takes the rest -->
+
+            <!-- post text and comment preview -->
             <div class="card-body flex-grow-1">
                 <div class="d-flex justify-content-between align-items-start mb-1">
                     <h5 class="mb-0" th:text="${post.movie.title}">Movie Title</h5>
                     <span class="text-muted small ms-2"
                           th:text="${#temporals.format(post.createdAt, 'd MMM yyyy')}">date</span>
                 </div>
+
                 <p class="text-muted small mb-2">
                     by <strong th:text="${post.user.username}">someone</strong>
                     <span th:if="${post.movie.year != null}" th:text="' · ' + ${post.movie.year}"> · year</span>
                 </p>
+
                 <p class="mb-3" style="white-space: pre-wrap;" th:text="${post.content}">Post content</p>
 
-                <!-- Top-comment block. Always rendered so empty-state cards
-                     have the same visual weight as commented ones. -->
+                <!-- top comment preview -->
                 <div class="border-start border-3 border-secondary-subtle ps-3 mb-3 small">
                     <div th:if="${topComments.containsKey(post.id)}">
                         <div class="text-muted mb-1">
@@ -96,7 +96,7 @@
         </div>
     </div>
 
-    <!-- Pagination controls -->
+    <!-- feed pages -->
     <nav th:if="${totalPages > 1}" class="d-flex justify-content-between align-items-center mt-4">
         <a th:if="${hasPrevious}"
            th:href="@{/feed(page=${currentPage - 1})}"

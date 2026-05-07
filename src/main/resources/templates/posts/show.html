@@ -12,7 +12,7 @@
 
 <main class="container py-4" style="max-width: 760px;">
 
-    <!-- Movie card -->
+    <!-- movie details -->
     <div class="card border-0 shadow-sm mb-3">
         <div class="row g-0">
             <div class="col-md-3">
@@ -39,7 +39,7 @@
         </div>
     </div>
 
-    <!-- The post itself -->
+    <!-- post body -->
     <div class="card border-0 shadow-sm mb-4">
         <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-2">
@@ -47,14 +47,16 @@
                 <div class="d-flex align-items-center gap-2">
                     <span class="text-muted small"
                           th:text="${#temporals.format(post.createdAt, 'd MMM yyyy, HH:mm')}">date</span>
-                    <!-- Author can delete their own post -->
+
+                    <!-- author delete -->
                     <form th:if="${iAmPostAuthor}"
                           th:action="@{'/posts/' + ${post.id} + '/delete'}"
                           method="post" class="m-0"
                           onsubmit="return confirm('Delete your post and all its comments?');">
                         <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
                     </form>
-                    <!-- Admin can delete any post (different endpoint, requires reason) -->
+
+                    <!-- admin delete -->
                     <form sec:authorize="hasRole('ADMIN')"
                           th:unless="${iAmPostAuthor}"
                           th:action="@{'/admin/posts/' + ${post.id} + '/delete'}"
@@ -71,7 +73,7 @@
         </div>
     </div>
 
-    <!-- Comments header -->
+    <!-- comments count -->
     <h2 class="h5 mb-3" id="comments">
         <span th:text="${totalCommentCount}">0</span>
         <span th:text="${totalCommentCount == 1} ? 'comment' : 'comments'">comments</span>
@@ -81,10 +83,9 @@
         No comments yet. First honest reaction?
     </div>
 
-    <!-- Top-level comments + their replies -->
     <div th:each="c : ${topLevelComments}" th:id="'comment-' + ${c.id}" class="mb-3">
 
-        <!-- The top-level comment itself -->
+        <!-- top level comment -->
         <div class="card border-0 shadow-sm">
             <div class="card-body py-3">
                 <div class="d-flex justify-content-between align-items-center mb-1">
@@ -92,14 +93,16 @@
                     <div class="d-flex align-items-center gap-2">
                         <span class="text-muted small"
                               th:text="${#temporals.format(c.createdAt, 'd MMM, HH:mm')}">date</span>
-                        <!-- Author of this comment can delete it -->
+
+                        <!-- comment author delete -->
                         <form th:if="${currentUserId != null and currentUserId == c.user.id}"
                               th:action="@{'/comments/' + ${c.id} + '/delete'}"
                               method="post" class="m-0"
                               onsubmit="return confirm('Delete your comment and any replies under it?');">
                             <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2">Delete</button>
                         </form>
-                        <!-- Admin can delete any comment (different endpoint, requires reason) -->
+
+                        <!-- admin comment delete -->
                         <form sec:authorize="hasRole('ADMIN')"
                               th:unless="${currentUserId != null and currentUserId == c.user.id}"
                               th:action="@{'/admin/comments/' + ${c.id} + '/delete'}"
@@ -114,7 +117,7 @@
                 </div>
                 <p class="mb-2" style="white-space: pre-wrap;" th:text="${c.content}">comment</p>
 
-                <!-- Reply toggler -->
+                <!-- reply box -->
                 <details class="small">
                     <summary class="text-primary" style="cursor: pointer;">Reply</summary>
                     <form th:action="@{'/posts/' + ${post.id} + '/comments/' + ${c.id} + '/reply'}"
@@ -133,7 +136,7 @@
             </div>
         </div>
 
-        <!-- Replies, indented under the parent -->
+        <!-- replies under this comment -->
         <div th:if="${repliesByParent.containsKey(c.id)}" class="ms-4 mt-2">
             <div th:each="r : ${repliesByParent.get(c.id)}"
                  th:id="'comment-' + ${r.id}"
@@ -144,14 +147,16 @@
                         <div class="d-flex align-items-center gap-2">
                             <span class="text-muted small"
                                   th:text="${#temporals.format(r.createdAt, 'd MMM, HH:mm')}">date</span>
-                            <!-- Reply's author can delete -->
+
+                            <!-- reply author delete -->
                             <form th:if="${currentUserId != null and currentUserId == r.user.id}"
                                   th:action="@{'/comments/' + ${r.id} + '/delete'}"
                                   method="post" class="m-0"
                                   onsubmit="return confirm('Delete your reply?');">
                                 <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2">Delete</button>
                             </form>
-                            <!-- Admin can delete any reply -->
+
+                            <!-- admin reply delete -->
                             <form sec:authorize="hasRole('ADMIN')"
                                   th:unless="${currentUserId != null and currentUserId == r.user.id}"
                                   th:action="@{'/admin/comments/' + ${r.id} + '/delete'}"
@@ -170,8 +175,7 @@
         </div>
     </div>
 
-    <!-- Admin reason-prompt helper. Tiny script: prompts the admin for a reason,
-         validates length, drops it into the form's hidden field, then submits. -->
+    <!-- admin delete prompt -->
     <script th:inline="javascript">
         function askReason(form, msg) {
             var r = prompt(msg + '\n\nReason for moderation:');
@@ -184,7 +188,7 @@
         }
     </script>
 
-    <!-- New top-level comment form -->
+    <!-- new comment -->
     <form th:action="@{'/posts/' + ${post.id} + '/comments'}"
           th:object="${commentForm}" method="post" class="mt-4 pt-3 border-top">
         <div class="mb-2">

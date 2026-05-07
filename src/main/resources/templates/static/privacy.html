@@ -12,54 +12,50 @@
 <main class="container py-4" style="max-width: 760px;">
     <h1 class="h3 mb-1">Privacy</h1>
     <p class="text-muted small mb-4">
-        This is an academic project (NTU final-year dissertation), not a commercial platform.
-        Plain-English summary of what we store and what your rights are.
+        This is an academic project, not a commercial platform.
+        Plain-English summary of what is stored and why.
     </p>
 
+    <!-- account and content data -->
     <h2 class="h5 mt-4">What we store</h2>
     <ul>
         <li>Your <strong>username, email, hashed password, and optional bio</strong>.</li>
         <li>Posts you write and comments you make, with timestamps.</li>
-        <li>Movies you've written about (metadata cached from the OMDb API).</li>
+        <li>Movies you've written about, using metadata cached from OMDb.</li>
         <li>Watch parties you create and RSVPs you make.</li>
     </ul>
 
     <h2 class="h5 mt-4">Where it's stored</h2>
     <p>
-        A PostgreSQL database hosted on Supabase. All connections to and from the
-        database are encrypted in transit (TLS). <strong>Passwords are never stored
-        in plain text</strong> — they are hashed with BCrypt using a per-user salt,
-        which means even the project author cannot read them.
+        A PostgreSQL database hosted on Supabase. Database connections use TLS.
+        <strong>Passwords are stored as BCrypt hashes</strong>, not plain text.
     </p>
 
     <h2 class="h5 mt-4">What we don't do</h2>
     <ul>
         <li>No analytics, tracking pixels, or third-party trackers.</li>
-        <li>No advertising of any kind.</li>
-        <li>No selling, sharing, or licensing of user data to anyone.</li>
-        <li>No cookies beyond a single session cookie that keeps you logged in.</li>
+        <li>No advertising.</li>
+        <li>No selling or licensing of user data.</li>
+        <li>No cookies beyond the session cookie used to keep you logged in.</li>
     </ul>
 
-    <h2 class="h5 mt-4">Your rights (UK DPA 2018 &amp; GDPR)</h2>
+    <!-- gdpr requests -->
+    <h2 class="h5 mt-4">Your rights</h2>
     <p>You can ask us to:</p>
     <ul>
-        <li><strong>Send you a copy</strong> of all data associated with your account.</li>
-        <li><strong>Delete your account</strong> and everything you've posted. The
-            database cascades the deletion through your posts, comments, RSVPs and
-            watch-party hosting; nothing personally identifying remains.</li>
-        <li><strong>Withdraw consent</strong> for any user-testing data collection
-            you may have agreed to.</li>
+        <li><strong>Send you a copy</strong> of data linked to your account.</li>
+        <li><strong>Delete your account</strong> and the posts, comments, RSVPs and watch parties linked to it.</li>
+        <li><strong>Withdraw consent</strong> for any user-testing data collection you agreed to.</li>
     </ul>
     <p>
         Email the project author at <strong>N1205202@my.ntu.ac.uk</strong> to make
         any of these requests. Responses within 7 days.
     </p>
 
-    <h2 class="h5 mt-4">Future work (and a limitation worth being honest about)</h2>
+    <h2 class="h5 mt-4">Current limitation</h2>
     <p class="small text-muted">
-        Account deletion is currently a manual process — we don't yet expose a
-        self-service "delete my account" button in the UI. Flagged in the
-        dissertation as future work for a production version.
+        Account deletion is currently manual. A self-service delete-account button
+        would be added in a production version.
     </p>
 
     <h2 class="h5 mt-4">Changes</h2>

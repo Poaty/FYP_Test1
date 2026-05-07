@@ -11,7 +11,7 @@
 
 <main class="container py-4" style="max-width: 760px;">
 
-    <!-- The movie they picked -->
+    <!-- picked movie -->
     <div class="card border-0 shadow-sm mb-4">
         <div class="row g-0">
             <div class="col-md-3">
@@ -38,7 +38,7 @@
         </div>
     </div>
 
-    <!-- Write form -->
+    <!-- post form -->
     <form th:action="@{/posts}" th:object="${postForm}" method="post">
         <input type="hidden" th:field="*{imdbId}">
 
@@ -53,6 +53,7 @@
             <div class="form-text">Up to 5000 characters.</div>
         </div>
 
+        <!-- save the post -->
         <div class="d-flex gap-2 align-items-center">
             <button type="submit" class="btn btn-primary px-4">Post it</button>
             <a th:href="@{/posts/new}" class="btn btn-link">Pick a different movie</a>

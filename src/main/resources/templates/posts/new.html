@@ -13,12 +13,12 @@
     <h1 class="h3 mb-1">What movie do you want to talk about?</h1>
     <p class="text-muted mb-4">Search OMDb, pick your film, then write whatever you really thought.</p>
 
-    <!-- Error bubble (user hand-typed an unknown imdb id, etc.) -->
+    <!-- bad imdb id or old link -->
     <div th:if="${param.error}" class="alert alert-warning">
         That didn't work — search again?
     </div>
 
-    <!-- Search form -->
+    <!-- movie search -->
     <form th:action="@{/posts/new}" method="get" class="d-flex gap-2 mb-4">
         <input type="search" name="q" th:value="${q}"
                class="form-control form-control-lg"
@@ -26,12 +26,11 @@
         <button type="submit" class="btn btn-primary px-4">Search</button>
     </form>
 
-    <!-- No results for that query -->
+    <!-- no search hits -->
     <div th:if="${searchPage != null and searchPage.empty}" class="alert alert-light border">
         No results for <strong th:text="'&quot;' + ${q} + '&quot;'">"query"</strong>. Try a different title or spelling.
     </div>
 
-    <!-- Grid of results -->
     <div th:if="${searchPage != null and not searchPage.empty}">
         <p class="text-muted small mb-3">
             <span th:text="${searchPage.totalResults}">N</span>
@@ -40,6 +39,8 @@
             Page <span th:text="${searchPage.currentPage}">1</span>
             of <span th:text="${searchPage.totalPages}">N</span>. Pick the one you meant:
         </p>
+
+        <!-- omdb results -->
         <div class="row g-3">
             <div th:each="item : ${searchPage.items}" class="col-md-6">
                 <div class="card h-100 shadow-sm border-0">
@@ -70,7 +71,7 @@
             </div>
         </div>
 
-        <!-- Pagination controls -->
+        <!-- result pages -->
         <nav th:if="${searchPage.totalPages > 1}"
              class="d-flex justify-content-between align-items-center mt-4">
             <a th:if="${searchPage.hasPrevious()}"

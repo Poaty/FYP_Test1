@@ -12,7 +12,7 @@
 
 <main class="container py-4" style="max-width: 760px;">
 
-    <!-- Event header -->
+    <!-- event details -->
     <div class="card border-0 shadow-sm mb-3">
         <div class="row g-0">
             <div class="col-md-3">
@@ -25,6 +25,7 @@
                      class="img-fluid rounded-start"
                      style="width: 100%; object-fit: cover;">
             </div>
+
             <div class="col-md-9">
                 <div class="card-body">
                     <h4 class="card-title mb-1" th:text="${event.title}">Event title</h4>
@@ -33,28 +34,32 @@
                         <span th:if="${event.movie.year != null}" th:text="' (' + ${event.movie.year} + ')'"> (year)</span>
                         · hosted by <strong th:text="${event.host.username}">host</strong>
                     </p>
+
                     <p class="mb-2 d-flex align-items-center gap-2 flex-wrap">
                         <span class="badge bg-secondary"
                               th:text="${#temporals.format(event.scheduledFor, 'EEEE d MMMM yyyy, HH:mm')}">when</span>
-                        <!-- Host can delete their own event -->
-                        <form th:if="${iAmHost}"
-                              th:action="@{'/events/' + ${event.id} + '/delete'}"
-                              method="post" class="m-0"
-                              onsubmit="return confirm('Cancel this watch party and remove its whole thread?');">
-                            <button type="submit" class="btn btn-sm btn-outline-danger">Cancel event</button>
-                        </form>
-                        <!-- Admin can delete any event -->
-                        <form sec:authorize="hasRole('ADMIN')"
-                              th:unless="${iAmHost}"
-                              th:action="@{'/admin/events/' + ${event.id} + '/delete'}"
-                              method="post" class="m-0">
-                            <input type="hidden" name="reason">
-                            <button type="submit" class="btn btn-sm btn-outline-warning"
-                                    onclick="return askReason(this.form, 'Delete this watch party (admin)?');">
-                                Delete event (admin)
-                            </button>
-                        </form>
+
+                        <!-- host delete -->
+                    <form th:if="${iAmHost}"
+                          th:action="@{'/events/' + ${event.id} + '/delete'}"
+                          method="post" class="m-0"
+                          onsubmit="return confirm('Cancel this watch party and remove its whole thread?');">
+                        <button type="submit" class="btn btn-sm btn-outline-danger">Cancel event</button>
+                    </form>
+
+                    <!-- admin delete -->
+                    <form sec:authorize="hasRole('ADMIN')"
+                          th:unless="${iAmHost}"
+                          th:action="@{'/admin/events/' + ${event.id} + '/delete'}"
+                          method="post" class="m-0">
+                        <input type="hidden" name="reason">
+                        <button type="submit" class="btn btn-sm btn-outline-warning"
+                                onclick="return askReason(this.form, 'Delete this watch party (admin)?');">
+                            Delete event (admin)
+                        </button>
+                    </form>
                     </p>
+
                     <p th:if="${event.description != null and !#strings.isEmpty(event.description)}"
                        class="card-text small text-muted mb-0" style="white-space: pre-wrap;"
                        th:text="${event.description}">description</p>
@@ -63,7 +68,7 @@
         </div>
     </div>
 
-    <!-- Attendance + RSVP -->
+    <!-- rsvp block -->
     <div class="card border-0 shadow-sm mb-4">
         <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
@@ -71,6 +76,7 @@
                     <span th:text="${attendingCount}">0</span>
                     <span th:text="${attendingCount == 1} ? 'person going' : 'people going'">people going</span>
                 </h2>
+
                 <form th:action="@{'/events/' + ${event.id} + '/rsvp'}" method="post" class="m-0">
                     <button th:if="${iAmAttending}" type="submit" class="btn btn-outline-secondary btn-sm">
                         ✓ Going (click to cancel)
@@ -80,6 +86,7 @@
                     </button>
                 </form>
             </div>
+
             <p th:if="${#lists.isEmpty(attendees)}" class="text-muted small mb-0">
                 Nobody yet. Be the first to RSVP.
             </p>
@@ -91,7 +98,7 @@
         </div>
     </div>
 
-    <!-- Comments -->
+    <!-- event messages -->
     <h2 class="h5 mb-3" id="comments">
         <span th:text="${#lists.size(eventComments)}">0</span>
         <span th:text="${#lists.size(eventComments) == 1} ? 'message' : 'messages'">messages</span>
@@ -108,14 +115,16 @@
                 <div class="d-flex align-items-center gap-2">
                     <span class="text-muted small"
                           th:text="${#temporals.format(c.createdAt, 'd MMM, HH:mm')}">date</span>
-                    <!-- Author of this message can delete -->
+
+                    <!-- message author delete -->
                     <form th:if="${currentUserId != null and currentUserId == c.user.id}"
                           th:action="@{'/events/' + ${event.id} + '/comments/' + ${c.id} + '/delete'}"
                           method="post" class="m-0"
                           onsubmit="return confirm('Delete your message?');">
                         <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2">Delete</button>
                     </form>
-                    <!-- Admin can delete any message (with reason) -->
+
+                    <!-- admin message delete -->
                     <form sec:authorize="hasRole('ADMIN')"
                           th:unless="${currentUserId != null and currentUserId == c.user.id}"
                           th:action="@{'/admin/event-comments/' + ${c.id} + '/delete'}"
@@ -128,11 +137,12 @@
                     </form>
                 </div>
             </div>
+
             <p class="mb-0" style="white-space: pre-wrap;" th:text="${c.content}">message</p>
         </div>
     </div>
 
-    <!-- Admin reason-prompt helper. -->
+    <!-- admin delete prompt -->
     <script th:inline="javascript">
         function askReason(form, msg) {
             var r = prompt(msg + '\n\nReason for moderation:');
@@ -145,7 +155,7 @@
         }
     </script>
 
-    <!-- New comment form -->
+    <!-- new event message -->
     <form th:action="@{'/events/' + ${event.id} + '/comments'}"
           th:object="${commentForm}" method="post" class="mt-4">
         <div class="mb-2">
@@ -157,6 +167,7 @@
             <div class="invalid-feedback" th:if="${#fields.hasErrors('content')}"
                  th:errors="*{content}">Content error</div>
         </div>
+
         <div class="d-flex justify-content-between align-items-center">
             <a th:href="@{/events}" class="btn btn-link px-0">← All watch parties</a>
             <button type="submit" class="btn btn-primary">Send</button>

@@ -12,17 +12,17 @@
 <main class="container py-5" style="max-width: 420px;">
     <h1 class="h3 mb-4">Log in</h1>
 
-    <!-- Success message after signup -->
+    <!-- after signup -->
     <div th:if="${param.registered}" class="alert alert-success">
         Account created — log in to continue.
     </div>
 
-    <!-- Error message after a failed login attempt -->
+    <!-- bad login details -->
     <div th:if="${param.error}" class="alert alert-danger">
         Wrong username or password.
     </div>
 
-    <!-- Confirmation after logout -->
+    <!-- after logout -->
     <div th:if="${param.logout}" class="alert alert-info">
         You've been logged out.
     </div>
@@ -33,11 +33,13 @@
             <input type="text" id="username" name="username" class="form-control"
                    autocomplete="username" required>
         </div>
+
         <div class="mb-4">
             <label for="password" class="form-label">Password</label>
             <input type="password" id="password" name="password" class="form-control"
                    autocomplete="current-password" required>
         </div>
+
         <button type="submit" class="btn btn-primary w-100">Log in</button>
     </form>
 

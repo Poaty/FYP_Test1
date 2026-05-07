@@ -19,6 +19,8 @@
                    class="form-control"
                    th:classappend="${#fields.hasErrors('username')} ? 'is-invalid' : ''"
                    autocomplete="username">
+
+            <!-- username validation -->
             <div class="invalid-feedback" th:if="${#fields.hasErrors('username')}"
                  th:errors="*{username}">Username error</div>
             <div class="form-text">3–30 characters. Letters, numbers, underscores.</div>
@@ -30,6 +32,8 @@
                    class="form-control"
                    th:classappend="${#fields.hasErrors('email')} ? 'is-invalid' : ''"
                    autocomplete="email">
+
+            <!-- email validation -->
             <div class="invalid-feedback" th:if="${#fields.hasErrors('email')}"
                  th:errors="*{email}">Email error</div>
         </div>
@@ -40,12 +44,16 @@
                    class="form-control"
                    th:classappend="${#fields.hasErrors('password')} ? 'is-invalid' : ''"
                    autocomplete="new-password">
+
+            <!-- password validation -->
             <div class="invalid-feedback" th:if="${#fields.hasErrors('password')}"
                  th:errors="*{password}">Password error</div>
             <div class="form-text">At least 8 characters.</div>
         </div>
 
         <button type="submit" class="btn btn-primary w-100">Create account</button>
+
+        <!-- policy links for signup -->
         <p class="text-muted small text-center mt-3 mb-0">
             By creating an account you agree to our
             <a th:href="@{/terms}">terms</a>,

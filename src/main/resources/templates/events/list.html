@@ -22,7 +22,7 @@
         That event doesn't exist (or got deleted).
     </div>
 
-    <!-- Empty state when there are no events at all -->
+    <!-- no events yet -->
     <div th:if="${#lists.isEmpty(upcoming) and #lists.isEmpty(past)}"
          class="card border-0 shadow-sm">
         <div class="card-body text-center py-5">
@@ -32,9 +32,6 @@
         </div>
     </div>
 
-    <!-- ============================================================
-         Upcoming watch parties
-         ============================================================ -->
     <section th:unless="${#lists.isEmpty(upcoming) and #lists.isEmpty(past)}">
         <h2 class="h5 mb-3">Upcoming</h2>
 
@@ -42,6 +39,7 @@
             Nothing scheduled. <a th:href="@{/events/new}">Schedule one →</a>
         </p>
 
+        <!-- upcoming cards -->
         <div th:each="e : ${upcoming}" class="card border-0 shadow-sm mb-4">
             <div class="d-flex align-items-start">
                 <div class="flex-shrink-0 me-1">
@@ -55,20 +53,24 @@
                          style="width: 180px; height: 270px; object-fit: cover;
                                 border-top-left-radius: 0.375rem; border-bottom-left-radius: 0.375rem;">
                 </div>
+
                 <div class="card-body flex-grow-1">
                     <div class="d-flex justify-content-between align-items-start mb-1 flex-wrap gap-2">
                         <h5 class="mb-0" th:text="${e.title}">Watch party title</h5>
                         <span class="badge bg-primary"
                               th:text="${#temporals.format(e.scheduledFor, 'EEE d MMM, HH:mm')}">date</span>
                     </div>
+
                     <p class="text-muted small mb-2">
                         <strong th:text="${e.movie.title}">Movie</strong>
                         <span th:if="${e.movie.year != null}" th:text="' (' + ${e.movie.year} + ')'"> (year)</span>
                         · hosted by <strong th:text="${e.host.username}">host</strong>
                     </p>
+
                     <p th:if="${e.description != null and !#strings.isEmpty(e.description)}"
                        class="mb-3 small" style="white-space: pre-wrap;"
                        th:text="${#strings.abbreviate(e.description, 240)}">description</p>
+
                     <div class="d-flex gap-3 align-items-center small">
                         <span class="text-muted">
                             <span th:text="${attendanceCounts.get(e.id) ?: 0}">0</span> attending
@@ -80,15 +82,13 @@
         </div>
     </section>
 
-    <!-- ============================================================
-         Past watch parties (only show if there are any)
-         ============================================================ -->
     <section th:unless="${#lists.isEmpty(past)}" class="mt-5">
         <h2 class="h5 mb-3 text-muted">Past</h2>
         <p class="text-muted small mb-3">
             Already happened. Comment threads still open if you want to drop in.
         </p>
 
+        <!-- past cards -->
         <div th:each="e : ${past}" class="card border-0 shadow-sm mb-4" style="opacity: 0.85;">
             <div class="d-flex align-items-start">
                 <div class="flex-shrink-0 me-1">
@@ -102,20 +102,24 @@
                          style="width: 180px; height: 270px; object-fit: cover;
                                 border-top-left-radius: 0.375rem; border-bottom-left-radius: 0.375rem;">
                 </div>
+
                 <div class="card-body flex-grow-1">
                     <div class="d-flex justify-content-between align-items-start mb-1 flex-wrap gap-2">
                         <h5 class="mb-0" th:text="${e.title}">Watch party title</h5>
                         <span class="badge bg-secondary"
                               th:text="${#temporals.format(e.scheduledFor, 'EEE d MMM, HH:mm')}">date</span>
                     </div>
+
                     <p class="text-muted small mb-2">
                         <strong th:text="${e.movie.title}">Movie</strong>
                         <span th:if="${e.movie.year != null}" th:text="' (' + ${e.movie.year} + ')'"> (year)</span>
                         · hosted by <strong th:text="${e.host.username}">host</strong>
                     </p>
+
                     <p th:if="${e.description != null and !#strings.isEmpty(e.description)}"
                        class="mb-3 small" style="white-space: pre-wrap;"
                        th:text="${#strings.abbreviate(e.description, 240)}">description</p>
+
                     <div class="d-flex gap-3 align-items-center small">
                         <span class="text-muted">
                             <span th:text="${attendanceCounts.get(e.id) ?: 0}">0</span> attended

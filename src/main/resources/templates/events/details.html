@@ -11,7 +11,7 @@
 
 <main class="container py-4" style="max-width: 760px;">
 
-    <!-- Selected movie -->
+    <!-- selected film -->
     <div class="card border-0 shadow-sm mb-4">
         <div class="row g-0">
             <div class="col-md-3">
@@ -59,6 +59,8 @@
                    th:classappend="${#fields.hasErrors('scheduledFor')} ? 'is-invalid' : ''">
             <div class="invalid-feedback" th:if="${#fields.hasErrors('scheduledFor')}"
                  th:errors="*{scheduledFor}">Date error</div>
+
+            <!-- controller treats this as uk time -->
             <div class="form-text">UK time. Attendees will see this in their local zone.</div>
         </div>
 
@@ -72,6 +74,7 @@
                  th:errors="*{description}">Description error</div>
         </div>
 
+        <!-- save the watch party -->
         <div class="d-flex gap-2 align-items-center">
             <button type="submit" class="btn btn-primary px-4">Schedule it</button>
             <a th:href="@{/events/new}" class="btn btn-link">Pick a different film</a>

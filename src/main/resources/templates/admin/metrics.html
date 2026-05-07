@@ -14,34 +14,36 @@
         <div>
             <h1 class="h3 mb-1">Feed metrics</h1>
             <p class="text-muted small mb-0">
-                Side-by-side comparison: popularity-only baseline vs the diversity-weighted For You feed.
-                Same input pool, same scoring -- only the diversity interleaving differs.
+                popularity baseline compared with the For You feed
             </p>
         </div>
+
+        <!-- admin page actions -->
         <div class="d-flex gap-2">
-            <a th:href="@{/admin/perf}" class="btn btn-outline-secondary">Performance →</a>
+            <a th:href="@{/admin/perf}" class="btn btn-outline-secondary">Performance</a>
             <a th:href="@{/admin/metrics.csv(size=${size})}" class="btn btn-outline-primary">Download CSV</a>
         </div>
     </div>
 
-    <!-- Sensitivity-analysis links: same metrics at different feed sizes -->
+    <!-- feed size checks -->
     <p class="text-muted small mb-4">
         Feed size:
         <a th:href="@{/admin/metrics(size=10)}" class="me-2">10</a>
         <a th:href="@{/admin/metrics(size=20)}" class="me-2"><strong>20</strong></a>
         <a th:href="@{/admin/metrics(size=30)}" class="me-2">30</a>
         <a th:href="@{/admin/metrics(size=40)}">40</a>
-        — currently showing <strong th:text="${size}">20</strong>
+        — showing <strong th:text="${size}">20</strong>
     </p>
 
+    <!-- main comparison table -->
     <div class="card border-0 shadow-sm mb-4">
         <div class="table-responsive">
             <table class="table table-sm align-middle mb-0">
                 <thead class="table-light">
                 <tr>
                     <th>Metric</th>
-                    <th class="text-end">Popularity-only baseline</th>
-                    <th class="text-end">Diverse For You feed</th>
+                    <th class="text-end">Baseline</th>
+                    <th class="text-end">For You</th>
                     <th class="text-end">Δ</th>
                     <th class="text-end">% change</th>
                 </tr>
@@ -50,7 +52,7 @@
                 <tr>
                     <td>
                         <strong>Shannon entropy</strong> <span class="text-muted small">(bits)</span><br>
-                        <span class="text-muted small">Genre diversity. Higher = more spread across genres.</span>
+                        <span class="text-muted small">genre spread across the feed</span>
                     </td>
                     <td class="text-end" th:text="${#numbers.formatDecimal(comparison.baseline.shannonEntropy, 1, 3)}">1.723</td>
                     <td class="text-end fw-semibold" th:text="${#numbers.formatDecimal(comparison.diverse.shannonEntropy, 1, 3)}">2.401</td>
@@ -61,8 +63,8 @@
                 </tr>
                 <tr>
                     <td>
-                        <strong>Shannon (normalised)</strong><br>
-                        <span class="text-muted small">Entropy / theoretical max (log₂ of distinct genres). 0–1.</span>
+                        <strong>Shannon normalised</strong><br>
+                        <span class="text-muted small">entropy divided by the max possible value</span>
                     </td>
                     <td class="text-end" th:text="${#numbers.formatDecimal(comparison.baseline.shannonNormalised, 1, 3)}">0.612</td>
                     <td class="text-end fw-semibold" th:text="${#numbers.formatDecimal(comparison.diverse.shannonNormalised, 1, 3)}">0.823</td>
@@ -72,7 +74,7 @@
                 <tr>
                     <td>
                         <strong>Unique authors</strong><br>
-                        <span class="text-muted small">Distinct usernames in the feed.</span>
+                        <span class="text-muted small">different users shown in the feed</span>
                     </td>
                     <td class="text-end" th:text="${comparison.baseline.uniqueAuthors}">9</td>
                     <td class="text-end fw-semibold" th:text="${comparison.diverse.uniqueAuthors}">17</td>
@@ -84,7 +86,7 @@
                 <tr>
                     <td>
                         <strong>Unique-author ratio</strong><br>
-                        <span class="text-muted small">Distinct authors / feed size.</span>
+                        <span class="text-muted small">distinct authors divided by feed size</span>
                     </td>
                     <td class="text-end" th:text="${#numbers.formatDecimal(comparison.baseline.uniqueAuthorRatio, 1, 3)}">0.45</td>
                     <td class="text-end fw-semibold" th:text="${#numbers.formatDecimal(comparison.diverse.uniqueAuthorRatio, 1, 3)}">0.85</td>
@@ -94,7 +96,7 @@
                 <tr>
                     <td>
                         <strong>Long-tail share</strong> <span class="text-muted small">(%)</span><br>
-                        <span class="text-muted small">% of feed slots with comment count ≤ pool median (<span th:text="${comparison.diverse.poolMedianComments}">2</span>).</span>
+                        <span class="text-muted small">posts with comments ≤ pool median (<span th:text="${comparison.diverse.poolMedianComments}">2</span>)</span>
                     </td>
                     <td class="text-end" th:text="${#numbers.formatDecimal(comparison.baseline.longTailPct, 1, 1)} + '%'">5.0%</td>
                     <td class="text-end fw-semibold" th:text="${#numbers.formatDecimal(comparison.diverse.longTailPct, 1, 1)} + '%'">25.0%</td>
@@ -106,7 +108,7 @@
                 <tr>
                     <td>
                         <strong>Mean comments per slot</strong><br>
-                        <span class="text-muted small">Average engagement of selected posts. Lower for diverse = more quiet content surfaced.</span>
+                        <span class="text-muted small">average comments on the selected posts</span>
                     </td>
                     <td class="text-end" th:text="${#numbers.formatDecimal(comparison.baseline.meanCommentsPerSlot, 1, 2)}">4.20</td>
                     <td class="text-end fw-semibold" th:text="${#numbers.formatDecimal(comparison.diverse.meanCommentsPerSlot, 1, 2)}">2.80</td>
@@ -120,20 +122,20 @@
         </div>
     </div>
 
-    <!-- Reading guide for the report -->
+    <!-- notes for reading the numbers -->
     <div class="card border-0 shadow-sm bg-white">
         <div class="card-body small">
-            <h2 class="h6">How to read this</h2>
+            <h2 class="h6">Notes</h2>
             <p class="mb-2">
                 Pool size: <strong th:text="${comparison.diverse.poolSize}">100</strong> recent posts.
                 Feed size: <strong th:text="${size}">20</strong>.
                 Pool median comments: <strong th:text="${comparison.diverse.poolMedianComments}">2</strong>.
             </p>
             <ul class="mb-0">
-                <li><strong>Higher Shannon entropy</strong> = greater genre diversity. The diverse feed should be measurably higher than the baseline.</li>
-                <li><strong>Higher unique-author ratio</strong> = more voices represented. Popularity-only ranking clusters around active users.</li>
-                <li><strong>Higher long-tail share</strong> = more low-engagement posts surfaced. By design the diverse feed targets ~20% (the 1:5 quiet-pick ratio); baseline should be near 0%.</li>
-                <li><strong>Lower mean comments per slot</strong> = quieter content reached. Confirms the quiet-pick slots actually fire.</li>
+                <li>higher Shannon entropy means the genres are more spread out</li>
+                <li>higher unique-author ratio means more users appear in the feed</li>
+                <li>higher long-tail share means more quiet posts have been included</li>
+                <li>lower mean comments usually means the quiet-pick slots are doing something</li>
             </ul>
         </div>
     </div>
